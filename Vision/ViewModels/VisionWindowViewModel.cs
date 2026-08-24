@@ -5,6 +5,7 @@ using HalconDotNet;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using System;
 using System.IO;
 
@@ -23,6 +24,7 @@ namespace Vision.ViewModels
         private readonly IEventAggregator _eventAggregator;
         private readonly ILogService _logger;
         private readonly IConfigService _config;
+        private readonly IDialogService _dialogService;
 
         // ROI 框选结果
         private double _roiRow1, _roiCol1, _roiRow2, _roiCol2;
@@ -150,7 +152,8 @@ namespace Vision.ViewModels
             IDetectionService detection,
             IEventAggregator eventAggregator,
             ILogService logger,
-            IConfigService config)
+            IConfigService config,
+            IDialogService dialog)
         {
             _camera = camera ?? throw new ArgumentNullException(nameof(camera));
             _template = template ?? throw new ArgumentNullException(nameof(template));
@@ -158,11 +161,12 @@ namespace Vision.ViewModels
             _eventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _dialogService = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
-            OpenCameraCmd = new DelegateCommand(ExecuteOpenCamera, () => !IsCameraOpen);
-            CloseCameraCmd = new DelegateCommand(ExecuteCloseCamera, () => IsCameraOpen);
-            StartGrabCmd = new DelegateCommand(ExecuteStartGrab, () => IsCameraOpen && !IsDetecting);
-            StopGrabCmd = new DelegateCommand(ExecuteStopGrab, () => IsCameraOpen && !IsDetecting);
+            OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
+            CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
+            StartGrabCmd = new DelegateCommand(async() => await ExecuteStartGrab(), () => IsCameraOpen && !IsDetecting);
+            StopGrabCmd = new DelegateCommand(async() => ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
             DrawRoiCmd = new DelegateCommand(ExecuteDrawRoi, () => !IsDetecting);
             CreateTemplateCmd = new DelegateCommand(ExecuteCreateTemplate, () => IsCameraOpen && !IsDetecting);
             LoadTemplateCmd = new DelegateCommand(ExecuteLoadTemplate, () => !IsDetecting);
@@ -274,107 +278,120 @@ namespace Vision.ViewModels
 
         #region 命令实现
 
-        private void ExecuteOpenCamera()
+        private async Task ExecuteOpenCamera()
         {
+            if (IsCameraOpen)
+            {
+                AddLog("WARN", "相机已打开");
+                return;
+            }
+            AddLog("INFO", "正在打开相机...");
             try
             {
                 var camSettings = _config.Camera;
-                _camera.Open(camSettings);
+
+                await Task.Run(() =>
+                {
+                    try { _camera.Open(camSettings); }
+                    catch (Exception ex)
+                    {
+                        throw new Exception($"相机已打开：{ex.Message}");
+                    }
+                });
+
+                if (!_camera.IsOpen)
+                {
+                    AddLog("ERROR", "相机打开失败：设备未响应");
+                    await  ShowErrorDialogAsync("相机打开失败！设备未响应\n\n请检查：\n1. 相机是否上电\n2. 网线是否连接\n3. 相机IP是否可达\n4. Halcon是否正确安装", "错误");
+                    return;
+                }
+               
                 IsCameraOpen = true;
-                StatusText = $"相机已连接 SN={camSettings.SerialNumber}";
+                
 
                 _grabSubToken?.Dispose();
                 _grabSubToken = _eventAggregator.GetEvent<ImageGrabbedEvent>()
                     .Subscribe(OnImageGrabbed, ThreadOption.UIThread);
+                AddLog("INFO", "相机已打开，等待采集...");
             }
             catch (Exception ex)
             {
-                StatusText = $"相机打开失败: {ex.Message}";
-                _logger.AddLog("Error", $"相机打开失败: {ex.Message}");
+                
+                AddLog("ERROR", $"相机打开失败: {ex.Message}");
+                await ShowErrorDialogAsync("相机打开失败！", "错误");
+
             }
         }
 
-        private void ExecuteCloseCamera()
+        private async Task ExecuteCloseCamera()
         {
+            AddLog("INFO", "相机正在关闭...");
             try
             {
-                if (IsDetecting) ExecuteStopDetect();
-                _camera.Close();
+                if (IsDetecting)  ExecuteStopDetect();
+
+                await Task.Run(() =>
+                {
+                    _camera.Close();
+                });
+                AddLog("DEBUG", "相机设备已关闭");
                 IsCameraOpen = false;
-                StatusText = "相机关闭";
+
+                await Task.Run(() =>
+                {
+                    _template.ClearTemplate();
+                });
+                AddLog("DEBUG", "模板数据已清除");
+                g
+
+                AddLog("INFO", "相机关闭完成，所有资源已释放");
+                await ShowInfoDialogAsync("相机关闭完成，所有资源已释放", "通知");
+                
             }
             catch (Exception ex)
             {
-                StatusText = $"相机关闭异常: {ex.Message}";
+
+                AddLog("ERROR", $"相机关闭失败: {ex.Message}");
+                await ShowErrorDialogAsync("相机关闭失败", "错误");
             }
         }
 
-        private void ExecuteStartGrab()
+        private async Task ExecuteStartGrab()
         {
             try
             {
-                _camera.StartGrabbing();
-                StatusText = "采集中...";
+                await Task.Run(() => { _camera.StartGrabbing(); });
+                AddLog("DEBUG", "相机图像采集中...");
+                
+                
             }
             catch (Exception ex)
             {
-                StatusText = $"启动采集失败: {ex.Message}";
+                AddLog("ERROR", $"图像采集异常: {ex.Message}");
+                await ShowErrorDialogAsync("图像采集异常", "错误");
             }
         }
 
-        private void ExecuteStopGrab()
+        private async Task ExecuteStopGrab()
         {
             try
             {
-                _camera.StopGrabbing();
-                StatusText = "采集停止";
+                await Task.Run(() => { _camera.StopGrabbing(); });
+                AddLog("DEBUG", "相机图像采集已停止");              
+                
             }
             catch (Exception ex)
             {
-                StatusText = $"停止采集异常: {ex.Message}";
+                AddLog("ERROR", $"停止采集异常: {ex.Message}");
+                await ShowErrorDialogAsync("停止采集异常", "错误");
+                    
             }
         }
 
         private void ExecuteCreateTemplate()
         {
-            HObject? frame;
-            lock (_frameLock) { frame = _lastFrame?.Clone(); }
-            if (frame == null)
-            {
-                StatusText = "无可用帧，请先采集或加载参考图";
-                return;
-            }
-            if (!_hasRoi)
-            {
-                StatusText = "请先在图像上框选 ROI";
-                frame.Dispose();
-                return;
-            }
-
-            try
-            {
-                _template.CreateTemplate(frame, _roiRow1, _roiCol1, _roiRow2, _roiCol2);
-                IsTemplateCreated = _template.IsTemplateCreated;
-                StatusText = $"模板创建成功 {_template.TemplateName}";
-                RefreshCommandStates();
-
-                // 清除 ROI 绘图对象，恢复正常采集显示
-                _isRoiDrawing = false;
-                RequestClearRoi?.Invoke();
-                RedisplayLastFrame();
-
-                if (_template.ModelContours != null)
-                    ShowOverlay(_template.ModelContours);
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"模板创建失败: {ex.Message}";
-                _logger.AddLog("Error", $"模板创建失败: {ex.Message}");
-            }
-            finally
-            {
-                frame.Dispose();
-            }
+            AddLog("INFO", "开始创建模板...");
+            if(!IsCameraOpen || _camera.)
         }
 
         private void ExecuteLoadTemplate()
@@ -477,14 +494,14 @@ namespace Vision.ViewModels
             }
         }
 
-        private void ExecuteStartDetect()
+        private async Task ExecuteStartDetect()
         {
             try
             {
                 _detection.Start(_template, _inspectionConfig);
 
                 if (!_camera.IsGrabbing)
-                    _camera.StartGrabbing();
+                   await ExecuteStartGrab();
 
                 IsDetecting = true;
                 StatusText = "检测中...";
@@ -612,6 +629,10 @@ namespace Vision.ViewModels
             return dir;
         }
 
+        private void AddLog(string level,string message)
+        {
+            _logger.AddLog(level, message);
+        }
         private void RefreshCommandStates()
         {
             OpenCameraCmd.RaiseCanExecuteChanged();
@@ -626,5 +647,98 @@ namespace Vision.ViewModels
             StartDetectCmd.RaiseCanExecuteChanged();
             StopDetectCmd.RaiseCanExecuteChanged();
         }
+
+
+        #region 对话框辅助方法（直接在 ViewModel 中）
+
+        private Task<bool> ShowConfirmationDialogAsync(string message, string title = "确认")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "message", message },
+                { "confirmText", "确定" },
+                { "cancelText", "取消" }
+            };
+
+            _dialogService.ShowDialog(
+                "ConfirmationDialog",
+                parameters,
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        var confirmed = result.Parameters.GetValue<bool>("Confirmed");
+                        tcs.SetResult(confirmed);
+                    }
+                    else
+                    {
+                        tcs.SetResult(false);
+                    }
+                });
+
+            return tcs.Task;
+        }
+
+        private Task ShowInfoDialogAsync(string message, string title = "提示")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            // 使用 Prism 内置的 NotificationDialog
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowErrorDialogAsync(string message, string title = "错误")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowWarningDialogAsync(string message, string title = "警告")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        #endregion
     }
 }
+    
+

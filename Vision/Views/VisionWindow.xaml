@@ -7,14 +7,18 @@
              mc:Ignorable="d"
              d:DesignHeight="600" d:DesignWidth="900">
     <Grid Margin="4">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
+            
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 工具栏 -->
-        <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+        <StackPanel Grid.Column="0" Orientation="Vertical" Margin="0,0,0,4">
             <Button Content="打开相机" Command="{Binding OpenCameraCmd}" Margin="2" Padding="8,2"/>
             <Button Content="关闭相机" Command="{Binding CloseCameraCmd}" Margin="2" Padding="8,2"/>
             <Separator/>
@@ -22,19 +26,21 @@
             <Button Content="停止采集" Command="{Binding StopGrabCmd}" Margin="2" Padding="8,2"/>
             <Separator/>
             <Button Content="加载参考图" Command="{Binding LoadReferenceImageCmd}" Margin="2" Padding="8,2"/>
-            <Button Content="绘制ROI" Command="{Binding DrawRoiCmd}" Margin="2" Padding="8,2"/>
             <Button Content="创建模板" Command="{Binding CreateTemplateCmd}" Margin="2" Padding="8,2"/>
+            <Button Content="绘制检测区域一" Margin="2" Padding="8.2"/>
+            <Button Content="绘制检测区域二" Margin="2" Padding="8.2"/>
             <Button Content="保存模板" Command="{Binding SaveTemplateCmd}" Margin="2" Padding="8,2"/>
             <Button Content="加载模板" Command="{Binding LoadTemplateCmd}" Margin="2" Padding="8,2"/>
             <Separator/>
             <Button Content="开始检测" Command="{Binding StartDetectCmd}" Margin="2" Padding="8,2"
-                    Background="LightGreen"/>
+                    Background="LightGreen" />
             <Button Content="停止检测" Command="{Binding StopDetectCmd}" Margin="2" Padding="8,2"
                     Background="LightCoral"/>
-        </WrapPanel>
+            
+        </StackPanel>
 
         <!-- Halcon 图像窗口 -->
-        <halcon:HSmartWindowControlWPF Grid.Row="1" x:Name="HalconWindow"
+        <halcon:HSmartWindowControlWPF Grid.Column="1" x:Name="HalconWindow"
                                        Margin="0,0,0,4"
                                        HMoveContent="False"
                                        HZoomContent="Off"/>
