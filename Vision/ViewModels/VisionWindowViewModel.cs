@@ -159,10 +159,21 @@ namespace Vision.ViewModels
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _config = config ?? throw new ArgumentNullException(nameof(config));
 
+<<<<<<< Updated upstream
             OpenCameraCmd = new DelegateCommand(ExecuteOpenCamera, () => !IsCameraOpen);
             CloseCameraCmd = new DelegateCommand(ExecuteCloseCamera, () => IsCameraOpen);
             StartGrabCmd = new DelegateCommand(ExecuteStartGrab, () => IsCameraOpen && !IsDetecting);
             StopGrabCmd = new DelegateCommand(ExecuteStopGrab, () => IsCameraOpen && !IsDetecting);
+=======
+            OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
+            CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
+            StartGrabCmd = new DelegateCommand(async() => await ExecuteStartGrab(), () => IsCameraOpen && !IsDetecting);
+<<<<<<< HEAD
+            StopGrabCmd = new DelegateCommand(async() =>await ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
+=======
+            StopGrabCmd = new DelegateCommand(async() => ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
+>>>>>>> 60f0d7d9a62666162f30d5ddd48345f47e8ff02d
+>>>>>>> Stashed changes
             DrawRoiCmd = new DelegateCommand(ExecuteDrawRoi, () => !IsDetecting);
             CreateTemplateCmd = new DelegateCommand(ExecuteCreateTemplate, () => IsCameraOpen && !IsDetecting);
             LoadTemplateCmd = new DelegateCommand(ExecuteLoadTemplate, () => !IsDetecting);
@@ -626,5 +637,149 @@ namespace Vision.ViewModels
             StartDetectCmd.RaiseCanExecuteChanged();
             StopDetectCmd.RaiseCanExecuteChanged();
         }
+<<<<<<< Updated upstream
+=======
+
+
+        #region 对话框辅助方法（直接在 ViewModel 中）
+
+        private Task<bool> ShowConfirmationDialogAsync(string message, string title = "确认")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "message", message },
+                { "confirmText", "确定" },
+                { "cancelText", "取消" }
+            };
+
+            _dialogService.ShowDialog(
+                "ConfirmationDialog",
+                parameters,
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        var confirmed = result.Parameters.GetValue<bool>("Confirmed");
+                        tcs.SetResult(confirmed);
+                    }
+                    else
+                    {
+                        tcs.SetResult(false);
+                    }
+                });
+
+            return tcs.Task;
+        }
+
+        private Task ShowInfoDialogAsync(string message, string title = "提示")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            // 使用 Prism 内置的 NotificationDialog
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowErrorDialogAsync(string message, string title = "错误")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowWarningDialogAsync(string message, string title = "警告")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialog",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+<<<<<<< HEAD
+        private Task<bool> ShowTemplateNameDialogAsync(out string templateName)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            string name = null;
+            _dialogService.ShowDialog("TemplateNameDialogView",
+                result=>{
+                    if(result.Result == ButtonResult.OK)
+                    {
+                         name = result.Parameters.GetValue<string>("TemplateName");
+                         tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        name = string.Empty;
+                        tcs.SetResult(false);
+                    }
+
+                 });
+            templateName = name;
+            return tcs.Task;
+        }
+
+        private Task<bool> ShowFileListDialogAsync( string filePath,out FileItem templateJson) 
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var parameters = new DialogParameters
+            {
+                { "FolderPath", @filePath  }
+            };
+            FileItem fileItem = null;
+            _dialogService.ShowDialog("FileListDiaLogView",
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
+                        tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        fileItem = null;
+                    }
+                });
+            templateJson = fileItem;
+            return tcs.Task;
+        }
+
+=======
+>>>>>>> 60f0d7d9a62666162f30d5ddd48345f47e8ff02d
+        #endregion
+>>>>>>> Stashed changes
     }
 }
