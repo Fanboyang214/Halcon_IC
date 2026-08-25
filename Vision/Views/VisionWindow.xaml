@@ -27,8 +27,8 @@
             <Separator/>
             <Button Content="加载参考图" Command="{Binding LoadReferenceImageCmd}" Margin="2" Padding="8,2"/>
             <Button Content="创建模板" Command="{Binding CreateTemplateCmd}" Margin="2" Padding="8,2"/>
-            <Button Content="绘制检测区域一" Margin="2" Padding="8.2"/>
-            <Button Content="绘制检测区域二" Margin="2" Padding="8.2"/>
+            <Button Content="绘制检测区域一" Margin="2" Padding="8,2"/>
+            <Button Content="绘制检测区域二" Margin="2" Padding="8,2"/>
             <Button Content="保存模板" Command="{Binding SaveTemplateCmd}" Margin="2" Padding="8,2"/>
             <Button Content="加载模板" Command="{Binding LoadTemplateCmd}" Margin="2" Padding="8,2"/>
             <Separator/>

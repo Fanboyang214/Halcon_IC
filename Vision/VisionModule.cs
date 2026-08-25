@@ -11,7 +11,9 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Vision.Services;
 using Vision.ViewModels;
+using Vision.ViewModels.Dialog;
 using Vision.Views;
+using Vision.Views.Dialog;
 
 namespace Vision
 {
@@ -36,6 +38,9 @@ namespace Vision
 
             containerRegistry.RegisterSingleton<ITemplateService, TemplateService>();
             containerRegistry.RegisterSingleton<IDetectionService, DetectionService>();
+
+            containerRegistry.RegisterDialog<TemplateNameDialogView, TemplateNameDialogViewModel>();
+            containerRegistry.RegisterDialog<FileListDialogView,FileListDialogViewModel>();
 
             containerRegistry.RegisterForNavigation<VisionWindow, VisionWindowViewModel>();
             containerRegistry.RegisterForNavigation<StatisticView, StatisticViewModel>();

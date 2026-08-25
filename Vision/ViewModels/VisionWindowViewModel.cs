@@ -8,6 +8,8 @@ using Prism.Mvvm;
 using Prism.Services.Dialogs;
 using System;
 using System.IO;
+using System.Windows;
+using Vision.ViewModels.Dialog;
 
 namespace Vision.ViewModels
 {
@@ -40,10 +42,13 @@ namespace Vision.ViewModels
         private bool _isDetecting;
         private bool _isCameraOpen;
         private bool _isTemplateCreated;
+        private bool _isCheckXld1Created;
+        private bool _isCheckXld2Created;
 
         // 当前帧缓存
         private HObject? _lastFrame;
         private readonly object _frameLock = new();
+        
 
         // 检测配置
         private readonly InspectionConfig _inspectionConfig = new();
@@ -118,6 +123,26 @@ namespace Vision.ViewModels
             }
         }
 
+        public bool IsCheckXld1Created
+        {
+            get => _isCheckXld1Created;
+            set
+            {
+                SetProperty(ref _isTemplateCreated, value);
+                RefreshCommandStates();
+            }
+        }
+
+        public bool IsCheckXld2Created
+        {
+            get => _isCheckXld2Created;
+            set
+            {
+                SetProperty(ref _isCheckXld2Created, value);
+                RefreshCommandStates();
+            }
+        }
+
         #endregion
 
         #region 命令
@@ -127,6 +152,8 @@ namespace Vision.ViewModels
         public DelegateCommand StartGrabCmd { get; }
         public DelegateCommand StopGrabCmd { get; }
         public DelegateCommand DrawRoiCmd { get; }
+        public DelegateCommand CreateCheckXld1Cmd { get; }
+        public DelegateCommand CreateCheckXld2Cmd { get; }
         public DelegateCommand CreateTemplateCmd { get; }
         public DelegateCommand LoadTemplateCmd { get; }
         public DelegateCommand SaveTemplateCmd { get; }
@@ -166,11 +193,13 @@ namespace Vision.ViewModels
             OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
             CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
             StartGrabCmd = new DelegateCommand(async() => await ExecuteStartGrab(), () => IsCameraOpen && !IsDetecting);
-            StopGrabCmd = new DelegateCommand(async() => ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
+            StopGrabCmd = new DelegateCommand(async() =>await ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
             DrawRoiCmd = new DelegateCommand(ExecuteDrawRoi, () => !IsDetecting);
+            CreateCheckXld1Cmd = new DelegateCommand(ExecuteCreateCheckXld1, () => IsTemplateCreated );
+            CreateCheckXld2Cmd = new DelegateCommand(ExecuteCreateCheckXld2, () => IsTemplateCreated );
             CreateTemplateCmd = new DelegateCommand(ExecuteCreateTemplate, () => IsCameraOpen && !IsDetecting);
             LoadTemplateCmd = new DelegateCommand(ExecuteLoadTemplate, () => !IsDetecting);
-            SaveTemplateCmd = new DelegateCommand(ExecuteSaveTemplate, () => IsTemplateCreated);
+            SaveTemplateCmd = new DelegateCommand(async()=>await ExecuteSaveTemplate(), () => IsTemplateCreated);
             LoadReferenceImageCmd = new DelegateCommand(ExecuteLoadReferenceImage, () => !IsDetecting);
             StartDetectCmd = new DelegateCommand(ExecuteStartDetect, () => IsTemplateCreated && !IsDetecting);
             StopDetectCmd = new DelegateCommand(ExecuteStopDetect, () => IsDetecting);
@@ -394,77 +423,166 @@ namespace Vision.ViewModels
             if(!IsCameraOpen || _camera.)
         }
 
-        private void ExecuteLoadTemplate()
+        private async Task ExecuteLoadTemplate()
         {
-            var dlg = new Microsoft.Win32.OpenFileDialog
+           
+            if (!Directory.Exists(TemplatesDir))
             {
-                Filter = "模板配置 (*.json)|*.json",
-                InitialDirectory = GetModelDirectory()
-            };
-            if (dlg.ShowDialog() != true) return;
+                AddLog("WARN", "模板目录加载失败，未找到模板目录");
+                await ShowWarningDialogAsync("模板目录加载失败，未找到模板目录\n请先保存模板，创建模板目录", "警告");
+            }
 
+            FileItem templateJson = null;
+            await ShowFileListDialogAsync(TemplatesDir, out templateJson);
+            if (templateJson == null || Directory.GetFiles(templateJson.FullPath).LongLength == 0)
+            {
+                AddLog("WARN", "模板加载失败，模板为空");
+                await ShowWarningDialogAsync("模板加载失败，模板为空");
+                return;
+            }
+
+            if (!IsCameraOpen)
+            {
+                AddLog("WARN", "加载模板失败: 相机未打开");
+                await ShowWarningDialogAsync("加载模板失败: 相机未打开");
+                return;
+            }
+
+            if (_lastFrame == null || !_lastFrame.IsInitialized())
+            {
+                AddLog("WARN", "加载模板失败: 当前无有效图像");
+                await ShowWarningDialogAsync("加载模板失败: 当前无有效图像");
+                return;
+            }
+            
             try
             {
-                string json = File.ReadAllText(dlg.FileName);
-                var cfg = TemplateConfig.FromJson(json);
-
-                string refImagePath = Path.ChangeExtension(dlg.FileName, ".png");
-                if (!File.Exists(refImagePath))
-                    refImagePath = Path.Combine(Path.GetDirectoryName(dlg.FileName)!, "ref.png");
-
-                if (!File.Exists(refImagePath))
+                string json = File.ReadAllText(templateJson.FullPath, System.Text.Encoding.UTF8);
+                var config = TemplateConfig.FromJson(json);
+                if(config == null)
                 {
-                    StatusText = "找不到参考图，请用\"加载参考图\"手动选择";
+                    AddLog("ERROR", "加载模板失败: 配置文件内容无效");
+                    await ShowErrorDialogAsync("加载模板失败: 配置文件内容无效");
                     return;
                 }
 
-                var refImage = new HObject();
-                HOperatorSet.ReadImage(out refImage, refImagePath);
+                if (IsDetecting)
+                {
+                    ExecuteStopDetect();
+                }
 
-                _template.LoadTemplate(cfg, refImage);
-                IsTemplateCreated = _template.IsTemplateCreated;
-                StatusText = $"模板已加载: {cfg.TemplateName}";
-                RefreshCommandStates();
+                IsTemplateCreated = false;
+                IsCheckXld1Created = false;
+                IsCheckXld2Created = false;
 
-                ShowImage(refImage);
-                if (_template.ModelContours != null)
-                    ShowOverlay(_template.ModelContours);
+                SetTemplateRegion(config.TemplateRow1, config.TemplateColumn1, config.TemplateRow2, config.TemplateColumn2);
+
+                if (!_template.IsTemplateCreated)
+                {
+                    AddLog("ERROR", "加载模板失败: 模板重建失败");
+                    await ShowErrorDialogAsync("加载模板失败: 模板重建失败");
+                    return;
+                }
+                // 重建两个检测区域的旋转矩形
+                SetCheckRectXid(config.CheckRect1Row, config.CheckRect1Column, config.CheckRect1Phi, config.CheckRect1Length1, config.CheckRect1Length2);
+                SetCheckRectXid2(config.CheckRect2Row, config.CheckRect2Column, config.CheckRect2Phi, config.CheckRect2Length1, config.CheckRect2Length2);
+
+                AddLog("INFO", $"模板 \"{templateJson.FileName}\" 已成功加载");
+                await ShowInfoDialogAsync($"模板 \"{templateJson.FileName}\" 已成功加载");
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
-                StatusText = $"加载模板失败: {ex.Message}";
-                _logger.AddLog("Error", $"加载模板失败: {ex.Message}");
+                AddLog("ERROR", $"加载模板失败：{ex.Message}");
+                await ShowErrorDialogAsync($"加载模板失败：{ex.Message}");
             }
+
         }
 
-        private void ExecuteSaveTemplate()
-        {
-            if (!IsTemplateCreated) return;
+        // 模板文件存储目录，位于程序根目录下的Templates文件夹
 
-            var dlg = new Microsoft.Win32.SaveFileDialog
+        private static readonly string TemplatesDir = System.IO.Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "Templates");
+        private async Task ExecuteSaveTemplate()
+        {
+            if (!IsTemplateCreated)
             {
-                Filter = "模板配置 (*.json)|*.json",
-                InitialDirectory = GetModelDirectory(),
-                FileName = $"{_template.TemplateName}.json"
-            };
-            if (dlg.ShowDialog() != true) return;
+                AddLog("WARN", "模板保存失败，模板未创建");
+                await ShowWarningDialogAsync("模板保存失败，模板未创建", "警告");
+                return;
+            }
+
+            if(!IsCheckXld1Created || !IsCheckXld2Created)
+            {
+                AddLog("WARN", "模板保存失败，检测区域未绘制");
+                await ShowWarningDialogAsync("模板保存失败，检测区域未绘制", "警告");
+                return;
+            }
+
+            string templateName = string.Empty;
+            await ShowTemplateNameDialogAsync(out templateName);
+            templateName=templateName.Trim();
+            if (string.IsNullOrWhiteSpace(templateName))
+            {
+                AddLog("WARN", "模板保存失败，模板名称不能为空");
+                await ShowWarningDialogAsync("模板保存失败，模板名称不能为空", "警告");
+                return;
+            }
+
+            foreach(var c in System.IO.Path.GetInvalidFileNameChars())
+            {
+                if (templateName.Contains(c))
+                {
+                    AddLog("WARN", "模板保存失败，模板名称不能含有非法字符（如 \\ / : * ? \" < > |）");
+                    await ShowWarningDialogAsync("模板保存失败，模板名称不能含有非法字符（如 \\ / : * ? \" < > |）", "警告");
+                    return;
+                }
+
+            }
 
             try
             {
-                var cfg = _template.ExportConfig();
-                Directory.CreateDirectory(GetModelDirectory());
-                File.WriteAllText(dlg.FileName, cfg.ToJson());
-                StatusText = $"模板已保存: {dlg.FileName}";
+                Directory.CreateDirectory(TemplatesDir);
+                var config = new TemplateConfig
+                {
+                    TemplateName = templateName,
+                    TemplateRow1 = _templateRow1,
+                    TemplateColumn1 = _templateColumn1,
+                    TemplateRow2 = _templateRow2,
+                    TemplateColumn2 = _templateColumn2,
+                    CheckRect1Row = _checkRect1Row,
+                    CheckRect1Column = _checkRect1Column,
+                    CheckRect1Phi = _checkRect1Phi,
+                    CheckRect1Length1 = _checkRect1Length1,
+                    CheckRect1Length2 = _checkRect1Length2,
+                    CheckRect2Row = _checkRect2Row,
+                    CheckRect2Column = _checkRect2Column,
+                    CheckRect2Phi = _checkRect2Phi,
+                    CheckRect2Length1 = _checkRect2Length1,
+                    CheckRect2Length2 = _checkRect2Length2
+                };
+                string filePath = Path.Combine(TemplatesDir, $"{templateName}.json");
+                if (Path.Exists(filePath))
+                {
+                   var result = await ShowConfirmationDialogAsync($"模板 \"{templateName}\" 已存在，是否覆盖？", "确认覆盖");
+                    if (!result)
+                    {
+                        AddLog("INFO", "保存模板已取消（不覆盖）");
+                        return;
+                    }
+                }
+                string templateJson = config.ToJson();
+                File.WriteAllText(filePath, templateJson, System.Text.Encoding.UTF8);
 
-                // 保存后清除 ROI 绘图对象，恢复正常采集显示
-                _isRoiDrawing = false;
-                RequestClearRoi?.Invoke();
-                RedisplayLastFrame();
-            }
-            catch (Exception ex)
+                AddLog("INFO", "模板保存成功");
+                await ShowInfoDialogAsync("模板保存成功");
+            }catch(Exception ex)
             {
-                StatusText = $"保存模板失败: {ex.Message}";
+                AddLog("ERROR", $"模板保存失败：{ex.Message}");
+                await ShowErrorDialogAsync($"模板保存失败：{ex.Message}");
             }
+
+
+
         }
 
         private void ExecuteLoadReferenceImage()
@@ -734,6 +852,53 @@ namespace Vision.ViewModels
                 parameters,
                 result => tcs.SetResult(true));
 
+            return tcs.Task;
+        }
+
+        private Task<bool> ShowTemplateNameDialogAsync(out string templateName)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            string name = null;
+            _dialogService.ShowDialog("TemplateNameDialogView",
+                result=>{
+                    if(result.Result == ButtonResult.OK)
+                    {
+                         name = result.Parameters.GetValue<string>("TemplateName");
+                         tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        name = string.Empty;
+                        tcs.SetResult(false);
+                    }
+
+                 });
+            templateName = name;
+            return tcs.Task;
+        }
+
+        private Task<bool> ShowFileListDialogAsync( string filePath,out FileItem templateJson) 
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var parameters = new DialogParameters
+            {
+                { "FolderPath", @filePath  }
+            };
+            FileItem fileItem = null;
+            _dialogService.ShowDialog("FileListDiaLogView",
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
+                        tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        fileItem = null;
+                    }
+                });
+            templateJson = fileItem;
             return tcs.Task;
         }
 
