@@ -56,6 +56,8 @@ namespace Vision.ViewModels
         // 订阅令牌
         private Prism.Events.SubscriptionToken? _grabSubToken;
 
+      
+
         /// <summary>
         /// Halcon 窗口引用（由 VisionWindow.xaml.cs 在 Loaded 时注入）。
         /// </summary>
@@ -170,7 +172,12 @@ namespace Vision.ViewModels
         /// 请求清除 ROI 绘图对象（由 View 订阅，分离 HDrawingObject 并恢复显示）。
         /// </summary>
         public event Action? RequestClearRoi;
-
+        
+        /// <summary>
+        /// 显示采集图像（由View订阅）
+        /// </summary>
+        public event Action<HObject>? ImageReady;
+        public event Action<HObject,string>? ImageReadyColor;
         #endregion
 
         public VisionWindowViewModel(
@@ -190,6 +197,8 @@ namespace Vision.ViewModels
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _dialogService = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
+            
+
             OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
             CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
             StartGrabCmd = new DelegateCommand(async() => await ExecuteStartGrab(), () => IsCameraOpen && !IsDetecting);
@@ -198,11 +207,13 @@ namespace Vision.ViewModels
             CreateCheckXld1Cmd = new DelegateCommand(ExecuteCreateCheckXld1, () => IsTemplateCreated );
             CreateCheckXld2Cmd = new DelegateCommand(ExecuteCreateCheckXld2, () => IsTemplateCreated );
             CreateTemplateCmd = new DelegateCommand(ExecuteCreateTemplate, () => IsCameraOpen && !IsDetecting);
-            LoadTemplateCmd = new DelegateCommand(ExecuteLoadTemplate, () => !IsDetecting);
+            LoadTemplateCmd = new DelegateCommand(async()=> await ExecuteLoadTemplate(), () => !IsDetecting);
             SaveTemplateCmd = new DelegateCommand(async()=>await ExecuteSaveTemplate(), () => IsTemplateCreated);
             LoadReferenceImageCmd = new DelegateCommand(ExecuteLoadReferenceImage, () => !IsDetecting);
             StartDetectCmd = new DelegateCommand(ExecuteStartDetect, () => IsTemplateCreated && !IsDetecting);
             StopDetectCmd = new DelegateCommand(ExecuteStopDetect, () => IsDetecting);
+
+            
         }
 
         /// <summary>
@@ -597,8 +608,8 @@ namespace Vision.ViewModels
             {
                 var img = new HObject();
                 HOperatorSet.ReadImage(out img, dlg.FileName);
-                ShowImage(img);
-
+                //ShowImage(img);
+                ImageReady?.Invoke(img);
                 lock (_frameLock)
                 {
                     _lastFrame?.Dispose();
@@ -654,7 +665,9 @@ namespace Vision.ViewModels
         {
             try
             {
-                ShowImage(payload.Image);
+                //ShowImage(payload.Image);
+                ImageReady?.Invoke(payload.Image);
+
 
                 lock (_frameLock)
                 {
@@ -674,7 +687,7 @@ namespace Vision.ViewModels
             }
             catch (Exception ex)
             {
-                _logger.AddLog("Error", $"OnImageGrabbed 异常: {ex.Message}");
+                AddLog("ERROR", $"OnImageGrabbed 异常: {ex.Message}");
             }
             finally
             {
@@ -693,8 +706,9 @@ namespace Vision.ViewModels
 
             if (result.DisplayImage != null)
             {
-                HalconWindow.SetPart(0, 0, -1, -1);
-                HalconWindow.DispObj(result.DisplayImage);
+                //HalconWindow.SetPart(0, 0, -1, -1);
+                //HalconWindow.DispObj(result.DisplayImage);
+                ImageReady?.Invoke(result.DisplayImage);
                 result.DisplayImage.Dispose();
             }
 
@@ -702,8 +716,9 @@ namespace Vision.ViewModels
             {
                 try
                 {
-                    HalconWindow.SetColor("green");
-                    HalconWindow.DispObj(result.ModelContours);
+                    //HalconWindow.SetColor("green");
+                    //HalconWindow.DispObj(result.ModelContours);
+                    ImageReadyColor?.Invoke(result.ModelContours, "green");
                 }
                 finally
                 {
@@ -715,8 +730,10 @@ namespace Vision.ViewModels
             {
                 try
                 {
-                    HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    HalconWindow.DispObj(result.DetectionRegion1);
+                    //HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
+                    //HalconWindow.DispObj(result.DetectionRegion1);
+                    ImageReadyColor?.Invoke(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
+
                 }
                 finally
                 {
@@ -728,8 +745,10 @@ namespace Vision.ViewModels
             {
                 try
                 {
-                    HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    HalconWindow.DispObj(result.DetectionRegion2);
+                    //HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
+                    //HalconWindow.DispObj(result.DetectionRegion2);
+                    ImageReadyColor?.Invoke(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
+
                 }
                 finally
                 {

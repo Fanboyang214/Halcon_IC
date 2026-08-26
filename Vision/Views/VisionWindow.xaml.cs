@@ -2,6 +2,7 @@ using HalconDotNet;
 using System;
 using System.Windows;
 using Vision.ViewModels;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Vision.Views
 {
@@ -24,12 +25,53 @@ namespace Vision.Views
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            if (DataContext is VisionWindowViewModel vm)
+            if (DataContext is  VisionWindowViewModel vm) 
             {
                 vm.HalconWindow = HalconWindow.HalconWindow;
                 vm.RequestDrawRoi += OnRequestDrawRoi;
                 vm.RequestClearRoi += OnRequestClearRoi;
+                vm.ImageReady += OnImageReady;
+                vm.ImageReadyColor += OnImageReadyColor;
             }
+        }
+
+        private void OnImageReadyColor(HObject obj,string color)
+        {
+            if (DataContext is VisionWindowViewModel vm) return;
+            if (obj is not HImage image) return;
+
+            if (HalconWindow == null || image == null) return;
+
+            try
+            {
+                HalconWindow.HalconWindow.SetColor(color);
+                HalconWindow.HalconWindow.DispObj(image);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"显示图像失败，当前窗口句柄：{HalconWindow.HalconWindow?.Handle}", ex);
+            }
+        }
+
+        private void OnImageReady(HObject @object)
+        {
+            if (DataContext is VisionWindowViewModel vm) return;
+            if (@object is not HImage image) return;
+
+            if (HalconWindow == null || image == null) return;
+            
+            try
+            {
+                HalconWindow.HalconWindow.SetPart(0, 0, -1, -1);
+                HalconWindow.HalconWindow.DispObj(image);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"显示图像失败，当前窗口句柄：{HalconWindow.HalconWindow?.Handle}", ex);
+            }
+
+
+
         }
 
         /// <summary>
@@ -148,6 +190,8 @@ namespace Vision.Views
             {
                 vm.RequestDrawRoi -= OnRequestDrawRoi;
                 vm.RequestClearRoi -= OnRequestClearRoi;
+                vm.ImageReady += OnImageReady;
+                vm.ImageReadyColor += OnImageReadyColor;
             }
         }
     }
