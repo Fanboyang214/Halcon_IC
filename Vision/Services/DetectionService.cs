@@ -51,6 +51,12 @@ namespace Vision.Services
         private volatile bool _running;
         private bool _disposed;
 
+        /// <summary>
+        /// 检测完成事件。消费者线程处理完一帧后发布结果。
+        /// 订阅方负责 Dispose DetectionResult 中的 HObject。
+        /// </summary>
+        public event Action<DetectionResult>? ResultReady;
+
         // Start 时绑定的模板与配置（消费者线程访问）
         private ITemplateService? _template;
         private InspectionConfig? _config;
@@ -131,10 +137,11 @@ namespace Vision.Services
             if (!_running || _queue == null)
                 throw new InvalidOperationException("检测未启动，无法入队。");
 
-            // L4：TryAdd 非阻塞，队列满即丢帧
-            bool added = _queue.TryAdd(frame);
+            var clone = frame.Clone();
+            bool added = _queue.TryAdd(clone);
             if (!added)
             {
+                clone.Dispose();
                 _logger?.AddLog("Warn", "DetectionService: 队列已满，丢弃当前帧");
             }
             return added;
@@ -339,7 +346,7 @@ namespace Vision.Services
         // ===== 内部方法 =====
 
         /// <summary>
-        /// 消费者线程主循环：从队列取帧 → Process → 发布结果。
+        /// 消费者线程主循环：从队列取帧 → Process → 发布结果事件。
         /// </summary>
         private void ConsumerLoop()
         {
@@ -367,10 +374,7 @@ namespace Vision.Services
 
                     if (result != null)
                     {
-                        result.DisplayImage?.Dispose();
-                        result.ModelContours?.Dispose();
-                        result.DetectionRegion1?.Dispose();
-                        result.DetectionRegion2?.Dispose();
+                        ResultReady?.Invoke(result);
                     }
                 }
             }

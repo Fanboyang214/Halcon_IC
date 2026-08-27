@@ -24,5 +24,10 @@ namespace Vision.Views.Dialog
         {
             InitializeComponent();
         }
+
+        private void ListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+
+        }
     }
 }

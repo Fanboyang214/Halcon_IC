@@ -39,6 +39,8 @@ namespace Vision
             containerRegistry.RegisterSingleton<ITemplateService, TemplateService>();
             containerRegistry.RegisterSingleton<IDetectionService, DetectionService>();
 
+            containerRegistry.RegisterDialog<NotificationDialogView, NotificationDialogViewModel>();
+            containerRegistry.RegisterDialog<ConfirmationDialogView, ConfirmationDialogViewModel>();
             containerRegistry.RegisterDialog<TemplateNameDialogView, TemplateNameDialogViewModel>();
             containerRegistry.RegisterDialog<FileListDialogView,FileListDialogViewModel>();
 

@@ -24,6 +24,12 @@ namespace Core.Interfaces
         int PendingCount { get; }
 
         /// <summary>
+        /// 检测完成事件。消费者线程处理完一帧后发布结果。
+        /// 订阅方负责 Dispose DetectionResult 中的 HObject。
+        /// </summary>
+        event Action<DetectionResult>? ResultReady;
+
+        /// <summary>
         /// 启动检测消费者线程。要求模板已创建，否则抛异常。
         /// 内部 BlockingCollection 开始接收帧；多次调用幂等（已在运行则直接返回）。
         /// </summary>
