@@ -10,6 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ViewModels\DetectionModuleViewModel.cs" />
+    <Compile Remove="Views\DetectionModuleView.xaml.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Remove="Views\DetectionModuleView.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
     <PackageReference Include="MaterialDesignThemes" Version="4.0.0" />
     <PackageReference Include="Prism.Wpf" Version="8.1.97" />

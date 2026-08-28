@@ -11,13 +11,13 @@
                   GridLinesVisibility="Horizontal" SelectionMode="Single"
                   CanUserAddRows="False" CanUserDeleteRows="False"
                   FontSize="10" RowHeight="22" Background="White"
-                  ItemsSource="{Binding Records}">
+                  ItemsSource="{Binding }">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="时间" Binding="{Binding Time}" Width="70"/>
-                <DataGridTextColumn Header="结果" Binding="{Binding Result}" Width="50"/>
-                <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="50"/>
-                <DataGridTextColumn Header="Pin1" Binding="{Binding Pin1}" Width="40"/>
-                <DataGridTextColumn Header="Pin2" Binding="{Binding Pin2}" Width="40"/>
+                <DataGridTextColumn Header="结果" Binding="{Binding Result}" Width="70"/>
+                <DataGridTextColumn Header="Score" Binding="{Binding Score}" Width="70"/>
+                <DataGridTextColumn Header="Pin1" Binding="{Binding Pin1}" Width="70"/>
+                <DataGridTextColumn Header="Pin2" Binding="{Binding Pin2}" Width="70"/>
             </DataGrid.Columns>
         </DataGrid>
     </Grid>

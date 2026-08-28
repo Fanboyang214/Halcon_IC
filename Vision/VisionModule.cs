@@ -48,7 +48,7 @@ namespace Vision
             containerRegistry.RegisterForNavigation<StatisticView, StatisticViewModel>();
             containerRegistry.RegisterForNavigation<MotionControlView, MotionControlViewModel>();
             containerRegistry.RegisterForNavigation<TemplatePanelView, TemplatePanelViewModel>();
-            containerRegistry.RegisterForNavigation<DetectionModuleView, DetectionModuleViewModel>();
+            //containerRegistry.RegisterForNavigation<DetectionModuleView, DetectionModuleViewModel>();
             containerRegistry.RegisterForNavigation<SystemLogView, SystemLogViewModel>();
             containerRegistry.RegisterForNavigation<DetectionRecordView, DetectionRecordViewModel>();
             containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
