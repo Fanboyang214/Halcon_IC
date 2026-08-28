@@ -46,6 +46,7 @@ namespace Vision.ViewModels
         private int _pinCount2;
         private bool _isDetecting;
         private bool _isCameraOpen;
+        
         private bool _isTemplateCreated;
         private bool _isCheckXld1Created;
         private bool _isCheckXld2Created;
@@ -513,7 +514,7 @@ namespace Vision.ViewModels
         private async Task ExecuteCreateTemplate()
         {
             AddLog("INFO", "开始创建模板...");
-            if(!IsCameraOpen || _lastFrame == null || _isTemplateDrawn)
+            if(!IsCameraOpen || _lastFrame == null)
             {
                 AddLog("ERROR", "绘制模板失败: 相机未打开或无图像");
                 await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像\n请先打开相机,确保画面有图像");
