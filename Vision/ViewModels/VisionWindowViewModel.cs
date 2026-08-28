@@ -5,6 +5,7 @@ using HalconDotNet;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using Prism.Navigation;
 using Prism.Services.Dialogs;
 using System;
 using System.IO;
@@ -19,7 +20,7 @@ namespace Vision.ViewModels
     /// 编排相机采集→模板创建/加载→检测→结果显示。
     /// 使用 HSmartWindowControlWPF + HWindow.DispObj 显示。
     /// </summary>
-    public class VisionWindowViewModel : BindableBase
+    public class VisionWindowViewModel : BindableBase,IDestructible
     {
         private readonly ICameraService _camera;
         private readonly ITemplateService _template;
@@ -28,6 +29,7 @@ namespace Vision.ViewModels
         private readonly ILogService _logger;
         private readonly IConfigService _config;
         private readonly IDialogService _dialogService;
+        
 
         // Template 框选结果
         private double _templateRow1,_templateColumn1,_templateRow2,_templateColumn2;
@@ -371,7 +373,7 @@ namespace Vision.ViewModels
             AddLog("INFO", "相机正在关闭...");
             try
             {
-                if (IsDetecting)  ExecuteStopDetect();
+                if (IsDetecting) await  ExecuteStopDetect();
 
                 await Task.Run(() =>
                 {
@@ -586,7 +588,7 @@ namespace Vision.ViewModels
 
                 if (IsDetecting)
                 {
-                    ExecuteStopDetect();
+                  await  ExecuteStopDetect();
                 }
 
                 IsTemplateCreated = false;
@@ -735,7 +737,7 @@ namespace Vision.ViewModels
         private async Task ExecuteStartDetect()
         {
             AddLog("INFO", "启动实时检测...");
-            ExecuteStopDetect();
+            await ExecuteStopDetect();
 
             if (_camera == null || _template == null || _detection == null)
             {
@@ -847,6 +849,7 @@ namespace Vision.ViewModels
             System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 OnDetectionResult(result);
+                _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
             });
         }
 
@@ -1114,6 +1117,11 @@ namespace Vision.ViewModels
                 });
             templateJson = fileItem;
             return tcs.Task;
+        }
+
+        public void Destroy()
+        {
+            _eventAggregator.GetEvent<ImageGrabbedEvent>().Unsubscribe(_grabSubToken);
         }
 
         #endregion

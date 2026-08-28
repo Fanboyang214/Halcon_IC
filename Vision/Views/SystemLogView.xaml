@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="200" d:DesignWidth="360"
              Background="White">
-    <Grid>
+    <Grid >
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -15,9 +15,29 @@
             <Button Content="清空" FontSize="10" Padding="6,2" Margin="0,0,6,0"/>
             <CheckBox Content="自动滚动" IsChecked="True" FontSize="10" VerticalAlignment="Center"/>
         </StackPanel>
-        <TextBox Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto"
+        <ListBox
+         ItemsSource="{Binding LogRecords}"
+         VirtualizingStackPanel.IsVirtualizing="True"
+         VirtualizingStackPanel.VirtualizationMode="Recycling"
+         ScrollViewer.VerticalScrollBarVisibility="Auto"
+         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+         ScrollViewer.CanContentScroll="True"         
+         VirtualizingStackPanel.ScrollUnit="Pixel" Grid.Row="1" Background="Black"
+         d:ItemsSource="{d:SampleData ItemCount=5}">
+            <!-- WPF 4.5+ 按像素滚动 -->
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding LogList}" 
+                       FontFamily="Consolas" 
+                       FontSize="10"
+                       Foreground="LightGray"          
+                       Margin="2,0,2,0"/>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <!--<TextBox Grid.Row="1" IsReadOnly="True" VerticalScrollBarVisibility="Auto"
                  TextWrapping="NoWrap" FontSize="10" FontFamily="Consolas"
                  Background="#FF1E1E1E" Foreground="#FFD4D4D4"
-                 BorderThickness="0" Padding="6" Text="系统日志就绪...&#10;等待操作..."/>
+                 BorderThickness="0" Padding="6" Text="系统日志就绪...&#10;等待操作..."/>-->
     </Grid>
 </UserControl>

@@ -11,11 +11,17 @@
 
   <ItemGroup>
     <Compile Remove="ViewModels\DetectionModuleViewModel.cs" />
+    <Compile Remove="ViewModels\MotionControlViewModel.cs" />
+    <Compile Remove="ViewModels\TemplatePanelViewModel.cs" />
     <Compile Remove="Views\DetectionModuleView.xaml.cs" />
+    <Compile Remove="Views\MotionControlView.xaml.cs" />
+    <Compile Remove="Views\TemplatePanelView.xaml.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Page Remove="Views\DetectionModuleView.xaml" />
+    <Page Remove="Views\MotionControlView.xaml" />
+    <Page Remove="Views\TemplatePanelView.xaml" />
   </ItemGroup>
 
   <ItemGroup>
