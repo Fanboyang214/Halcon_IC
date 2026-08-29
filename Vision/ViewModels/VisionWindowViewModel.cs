@@ -1122,6 +1122,8 @@ namespace Vision.ViewModels
         public void Destroy()
         {
             _eventAggregator.GetEvent<ImageGrabbedEvent>().Unsubscribe(_grabSubToken);
+            _grabSubToken?.Dispose();
+            _grabSubToken = null;
         }
 
         #endregion
