@@ -16,7 +16,11 @@ namespace Vision.ViewModels.Dialog
             public string TemplateName
             {
                 get { return _templateName; }
-                set { SetProperty(ref _templateName, value); }
+                set
+                {
+                    SetProperty(ref _templateName, value);
+                    ConfirmCommand.RaiseCanExecuteChanged();
+                }
             }
 
             public string Title => "创建模板";

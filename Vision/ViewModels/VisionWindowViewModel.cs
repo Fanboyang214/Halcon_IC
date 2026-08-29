@@ -256,7 +256,7 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld1 = ho_r2Rectangle;
-                _isCheckXld1Drawn = true;
+                IsCheckXld1Created = true;
                 AddLog("INFO", "检测区域1设置成功");
                 await ShowInfoDialogAsync("检测区域1设置成功");
             }
@@ -269,7 +269,7 @@ namespace Vision.ViewModels
                     _checkXld1?.Dispose();
                 }
                 _checkXld1 = null;
-                _isCheckXld1Drawn = false;
+                IsCheckXld1Created = false;
             }
         }
 
@@ -287,8 +287,8 @@ namespace Vision.ViewModels
                 HOperatorSet.GenRectangle2ContourXld(out HObject ho_r2Rectangle, hv_r3Row, hv_r3Column, hv_r3Phi, hv_r3Length1, hv_r3Length2);
                 if (ho_r2Rectangle == null || !ho_r2Rectangle.IsInitialized())
                 {
-                    AddLog("ERROR", "生成检测区域1失败: 坐标或尺寸无效");
-                    await ShowErrorDialogAsync("生成检测区域1失败，请检查绘制的坐标和尺寸");
+                    AddLog("ERROR", "生成检测区域2失败: 坐标或尺寸无效");
+                    await ShowErrorDialogAsync("生成检测区域2失败，请检查绘制的坐标和尺寸");
                     return;
                 }
 
@@ -298,20 +298,20 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld2 = ho_r2Rectangle;
-                _isCheckXld2Drawn = true;
-                AddLog("INFO", "检测区域1设置成功");
-                await ShowInfoDialogAsync("检测区域1设置成功");
+                IsCheckXld2Created = true;
+                AddLog("INFO", "检测区域2设置成功");
+                await ShowInfoDialogAsync("检测区域2设置成功");
             }
             catch (Exception ex)
             {
-                AddLog("ERROR", $"设置检测区域1失败: {ex.Message}");
-                MessageBox.Show($"设置检测区域1失败：{ex.Message}");
+                AddLog("ERROR", $"设置检测区域2失败: {ex.Message}");
+                MessageBox.Show($"设置检测区域2失败：{ex.Message}");
                 if (_checkXld2 != null && _checkXld2.IsInitialized())
                 {
                     _checkXld2?.Dispose();
                 }
                 _checkXld2 = null;
-                _isCheckXld2Drawn = false;
+                IsCheckXld1Created = false;
             }
         }
 
@@ -400,13 +400,13 @@ namespace Vision.ViewModels
                     _checkXld1.Dispose();
                 }
                 _checkXld1 = null;
-                _isCheckXld1Drawn = false;
+                IsCheckXld1Created = false;
                 if(_checkXld2  != null && _checkXld2.IsInitialized() )
                 {
                     _checkXld2.Dispose();
                 }
                 _checkXld2 = null;
-                _isCheckXld2Drawn = false;
+                IsCheckXld1Created = false;
 
                 AddLog("INFO", "相机关闭完成，所有资源已释放");
                 await ShowInfoDialogAsync("相机关闭完成，所有资源已释放", "通知");
@@ -477,7 +477,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像或未绘制模板\n请先打开相机,确保画面有图像，并绘制模板");
                 return;
             }
-            if (_isCheckXld1Drawn)
+            if (IsCheckXld1Created)
             {
 
                 AddLog("WARN", "检测区域1已存在");
@@ -497,13 +497,13 @@ namespace Vision.ViewModels
 
         private async Task ExecuteCreateCheckXld2()
         {
-            if (!IsCameraOpen || !_isTemplateDrawn || !_isCheckXld1Drawn)
+            if (!IsCameraOpen || !IsTemplateCreated || !IsCheckXld1Created)
             {
                 AddLog("ERROR", "绘制检测区域2失败: 请先创建模板和检测区域1");
                 await ShowErrorDialogAsync("绘制检测区域2失败: 请先创建模板和检测区域1");
                 return;
             }
-            if (_isCheckXld2Drawn)
+            if (IsCheckXld2Created)
             {
                 AddLog("WARN", "检测区域2已存在");
                 await ShowWarningDialogAsync("检测区域2已存在");
@@ -758,7 +758,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("模板未创建，请先绘制模板");
                 return;
             }
-            if (!_isCheckXld1Drawn || !_isCheckXld2Drawn || _checkXld1 == null || _checkXld2 == null)
+            if (!IsCheckXld1Created || !IsCheckXld1Created || _checkXld1 == null || _checkXld2 == null)
             {
                 AddLog("ERROR", "启动检测失败: 检测区域未完整绘制");
                 await ShowErrorDialogAsync("请先绘制检测区域");
@@ -934,7 +934,8 @@ namespace Vision.ViewModels
             CloseCameraCmd.RaiseCanExecuteChanged();
             StartGrabCmd.RaiseCanExecuteChanged();
             StopGrabCmd.RaiseCanExecuteChanged();
-   
+            CreateCheckXld1Cmd.RaiseCanExecuteChanged();
+            CreateCheckXld2Cmd.RaiseCanExecuteChanged();
             CreateTemplateCmd.RaiseCanExecuteChanged();
             LoadTemplateCmd.RaiseCanExecuteChanged();
             SaveTemplateCmd.RaiseCanExecuteChanged();
@@ -970,7 +971,7 @@ namespace Vision.ViewModels
                     return;
                 }
 
-                _isTemplateDrawn = true;
+                IsTemplateCreated = true;
                 AddLog("INFO", "芯片模板创建成功");
                 await ShowInfoDialogAsync("模板创建成功");
             }
@@ -979,7 +980,7 @@ namespace Vision.ViewModels
                 AddLog("ERROR", $"设置模板区域失败: {ex.Message}");
                 await ShowErrorDialogAsync($"设置模板区域失败：{ex.Message}");
                 _template.ClearTemplate();
-                _isTemplateDrawn = false;
+                IsTemplateCreated = false;
             }
         }
 

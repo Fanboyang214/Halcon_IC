@@ -7,13 +7,18 @@
              xmlns:prism="http://prismlibrary.com/"
              mc:Ignorable="d" 
              d:DesignHeight="200" d:DesignWidth="400"
+             d:MinHeight="200" d:MinWidth="400"
              prism:ViewModelLocator.AutoWireViewModel="True">
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="3*"/>
+            <!--标题-->
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="4*"/>
+            <!--标签+输入框：关键！Auto，禁止*拉伸-->
+            <RowDefinition Height="Auto"/>
+            <!--按钮行-->
+            <RowDefinition Height="*"/>
+            <!--剩余留白区域用*，留给空白-->
         </Grid.RowDefinitions>
 
         <Grid.ColumnDefinitions>
@@ -28,17 +33,19 @@
                    FontWeight="Bold"
                    Margin="0,0,0,20"/>
 
-        <!-- 标签 -->
+        <!-- 标签：垂直居中 -->
         <TextBlock Grid.Row="1" Grid.Column="0" 
                    Text="模板名称:" 
                    VerticalAlignment="Center"
                    Margin="0,0,10,0"/>
 
-        <!-- 输入框 -->
+        <!--输入框：移除固定Height，使用Padding控制上下内边距，VerticalAlignment="Center"-->
         <TextBox Grid.Row="1" Grid.Column="1" 
                  Text="{Binding TemplateName, UpdateSourceTrigger=PropertyChanged}"
-                 Height="30"
-                 VerticalContentAlignment="Center"/>
+                 VerticalAlignment="Center"
+                 VerticalContentAlignment="Center"
+                 Padding="6,4"
+                 MinHeight="30"/>
 
         <!-- 按钮区域 -->
         <StackPanel Grid.Row="2" Grid.ColumnSpan="2" 
