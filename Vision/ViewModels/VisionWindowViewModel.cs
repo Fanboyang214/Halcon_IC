@@ -543,9 +543,14 @@ namespace Vision.ViewModels
 
         }
 
+        // 模板文件存储目录，位于程序根目录下的Templates文件夹
+
+        private static readonly string TemplatesDir = System.IO.Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "Templates");
+
         private async Task ExecuteLoadTemplate()
         {
-           
+            
             if (!Directory.Exists(TemplatesDir))
             {
                 AddLog("WARN", "模板目录加载失败，未找到模板目录");
@@ -553,8 +558,8 @@ namespace Vision.ViewModels
             }
 
             FileItem templateJson = null;
-            await ShowFileListDialogAsync(TemplatesDir, out templateJson);
-            if (templateJson == null || Directory.GetFiles(templateJson.FullPath).LongLength == 0)
+            templateJson =( await ShowFileListDialogAsync(TemplatesDir)).templateJson;
+            if (templateJson == null || new FileInfo(templateJson.FullPath).Length == 0)
             {
                 AddLog("WARN", "模板加载失败，模板为空");
                 await ShowWarningDialogAsync("模板加载失败，模板为空");
@@ -607,8 +612,8 @@ namespace Vision.ViewModels
                 await SetCheckXld1(config.CheckRect1Row, config.CheckRect1Column, config.CheckRect1Phi, config.CheckRect1Length1, config.CheckRect1Length2);
                 await SetCheckXld2(config.CheckRect2Row, config.CheckRect2Column, config.CheckRect2Phi, config.CheckRect2Length1, config.CheckRect2Length2);
 
-                AddLog("INFO", $"模板 \"{templateJson.FileName}\" 已成功加载");
-                await ShowInfoDialogAsync($"模板 \"{templateJson.FileName}\" 已成功加载");
+                AddLog("INFO", $"模板 \"{templateJson.Name}\" 已成功加载");
+                await ShowInfoDialogAsync($"模板 \"{templateJson.Name}\" 已成功加载");
             }
             catch(Exception ex)
             {
@@ -618,10 +623,7 @@ namespace Vision.ViewModels
 
         }
 
-        // 模板文件存储目录，位于程序根目录下的Templates文件夹
-
-        private static readonly string TemplatesDir = System.IO.Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Templates");
+       
         private async Task ExecuteSaveTemplate()
         {
             if (!IsTemplateCreated)
@@ -1026,7 +1028,8 @@ namespace Vision.ViewModels
             var parameters = new DialogParameters
             {
                 { "title", title },
-                { "content", message }
+                { "content", message },
+               
             };
 
             _dialogService.ShowDialog(
@@ -1095,29 +1098,29 @@ namespace Vision.ViewModels
             return tcs.Task;
         }
 
-        private Task<bool> ShowFileListDialogAsync( string filePath,out FileItem templateJson) 
+        private async Task<(bool success,FileItem templateJson)> ShowFileListDialogAsync( string filePath) 
         {
-            var tcs = new TaskCompletionSource<bool>();
+            var tcs = new TaskCompletionSource<FileItem>();
             var parameters = new DialogParameters
             {
-                { "FolderPath", @filePath  }
+                { "FolderPath", filePath  }
             };
-            FileItem fileItem = null;
-            _dialogService.ShowDialog("FileListDialogView",
+            
+            _dialogService.ShowDialog("FileDialogView",parameters,
                 result =>
                 {
                     if (result.Result == ButtonResult.OK)
                     {
-                        fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
-                        tcs.SetResult(true);
+                        var fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
+                        tcs.SetResult(fileItem);
                     }
                     else
                     {
-                        fileItem = null;
+                        tcs.SetResult(null);
                     }
                 });
-            templateJson = fileItem;
-            return tcs.Task;
+            var templateJson =await tcs.Task;
+            return (templateJson != null, templateJson);
         }
 
         public void Destroy()

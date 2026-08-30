@@ -7,6 +7,7 @@
              xmlns:prism="http://prismlibrary.com/"
              mc:Ignorable="d" 
              d:DesignHeight="180" d:DesignWidth="380"
+             MinHeight="250 " MinWidth="500"
              prism:ViewModelLocator.AutoWireViewModel="True">
     <Grid Margin="20">
         <Grid.RowDefinitions>

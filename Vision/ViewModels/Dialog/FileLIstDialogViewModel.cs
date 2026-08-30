@@ -67,6 +67,15 @@ namespace Vision.ViewModels.Dialog
         private ObservableCollection<FileItem> _allFiles;
         private string _folderPath;
 
+        public string FolderPath
+        {
+            get => _folderPath;
+            set
+            {
+                SetProperty(ref _folderPath, value);
+            }
+        }
+
         public FileListDialogViewModel()
         {
             FileItems = new ObservableCollection<FileItem>();

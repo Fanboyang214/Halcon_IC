@@ -6,8 +6,8 @@
              xmlns:local="clr-namespace:Vision.Views.Dialog"
              xmlns:prism="http://prismlibrary.com/"
              mc:Ignorable="d" 
-             d:DesignHeight="200" d:DesignWidth="400"
-             d:MinHeight="200" d:MinWidth="400"
+             d:DesignHeight="300" d:DesignWidth="500"
+             MinHeight="200" MinWidth="400"
              prism:ViewModelLocator.AutoWireViewModel="True">
     <Grid Margin="20">
         <Grid.RowDefinitions>

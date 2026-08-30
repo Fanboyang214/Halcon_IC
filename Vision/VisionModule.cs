@@ -42,7 +42,8 @@ namespace Vision
             containerRegistry.RegisterDialog<NotificationDialogView, NotificationDialogViewModel>();
             containerRegistry.RegisterDialog<ConfirmationDialogView, ConfirmationDialogViewModel>();
             containerRegistry.RegisterDialog<TemplateNameDialogView, TemplateNameDialogViewModel>();
-            containerRegistry.RegisterDialog<FileListDialogView,FileListDialogViewModel>();
+            //containerRegistry.RegisterDialog<FileListDialogView,FileListDialogViewModel>();
+            containerRegistry.RegisterDialog<FileDialogView, FileDialogViewModel>();
 
             containerRegistry.RegisterForNavigation<VisionWindow, VisionWindowViewModel>();
             containerRegistry.RegisterForNavigation<StatisticView, StatisticViewModel>();
