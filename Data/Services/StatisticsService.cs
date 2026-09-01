@@ -67,7 +67,7 @@ namespace Data.Services
             // 1. 构造实体
             var record = new ProductInspectionRecord
             {
-                InspectionTime = DateTime.Now,
+                InspectionTime =result.Time,
                 ProductModel = templateName ?? string.Empty,
                 MatchScore = result.MatchScore,
                 PinCount = result.PinCount,

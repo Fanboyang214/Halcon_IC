@@ -5,7 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
              mc:Ignorable="d"
-             d:DesignHeight="450" d:DesignWidth="800">
+             d:DesignHeight="500" d:DesignWidth="800">
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -25,7 +25,16 @@
             <TextBlock Text="| 实时:" VerticalAlignment="Center" Margin="16,0,4,0"/>
             <TextBlock Text="{Binding TotalCount, StringFormat=总数:{0}}" VerticalAlignment="Center" Margin="4,0"/>
             <TextBlock Text="{Binding OkCount, StringFormat=合格:{0}}" VerticalAlignment="Center" Margin="4,0"/>
-            <TextBlock Text="{Binding NgCount, StringFormat=不合格:{0}}" VerticalAlignment="Center" Margin="4,0"/>
+            <TextBlock Text="{Binding NgCount, StringFormat=不合格:{0}}" VerticalAlignment="Center" Margin="4,0" RenderTransformOrigin="0.5,0.5">
+                <TextBlock.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform/>
+                        <SkewTransform/>
+                        <RotateTransform Angle="-5.141"/>
+                        <TranslateTransform/>
+                    </TransformGroup>
+                </TextBlock.RenderTransform>
+            </TextBlock>
             <TextBlock Text="{Binding Yield, StringFormat=良率:{0:F1}%}" VerticalAlignment="Center" Margin="4,0" FontWeight="Bold"/>
         </StackPanel>
 
@@ -45,7 +54,7 @@
         </Border>
 
         <!-- LiveCharts 双曲线图 -->
-        <Border Grid.Row="2" BorderBrush="#FFCCCCCC" BorderThickness="1">
+        <Border Grid.Row="2" BorderBrush="Black" BorderThickness="1">
             <lvc:CartesianChart Series="{Binding Series}" YAxes="{Binding YAxes}" />
         </Border>
     </Grid>

@@ -52,7 +52,7 @@ namespace Vision
             //containerRegistry.RegisterForNavigation<DetectionModuleView, DetectionModuleViewModel>();
             containerRegistry.RegisterForNavigation<SystemLogView, SystemLogViewModel>();
             containerRegistry.RegisterForNavigation<DetectionRecordView, DetectionRecordViewModel>();
-            containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
+            //containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
         }
 
         private static bool IsDirectShowConfigured()

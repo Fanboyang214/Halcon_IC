@@ -30,7 +30,7 @@ namespace ICApp
         {
             _regionManager.RequestNavigate("VisionRegion", "VisionWindow");
             _regionManager.RequestNavigate("StatisticRegion", "StatisticView");
-            _regionManager.RequestNavigate("MotionControlRegion", "MotionControlView");
+            _regionManager.RequestNavigate("MotionControl", "MotionControlView");
             _regionManager.RequestNavigate("TemplatePanelRegion", "TemplatePanelView");
             _regionManager.RequestNavigate("DetectionModuleRegion", "DetectionModuleView");
             _regionManager.RequestNavigate("SystemLogRegion", "SystemLogView");

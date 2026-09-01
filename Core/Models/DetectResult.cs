@@ -14,6 +14,11 @@ namespace Core.Models
     /// </summary>
     public class DetectionResult
     {
+        public DateTime Time
+        {
+            get; set;
+        }
+
         /// <summary>
         /// 模板匹配得分（0-100）
         /// 分数越高表示匹配越精确，阈值0.6对应约60分

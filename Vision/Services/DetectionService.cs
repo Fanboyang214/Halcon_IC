@@ -269,6 +269,7 @@ namespace Vision.Services
                 result.DetectionRegion2 = rect2Region;
                 rect2Region = null;
 
+                result.Time = DateTime.Now;
                 return result;
             }
             catch (HOperatorException ex)

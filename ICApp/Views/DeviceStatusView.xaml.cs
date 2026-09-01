@@ -1,6 +1,6 @@
 using System.Windows.Controls;
 
-namespace Vision.Views
+namespace ICApp.Views
 {
     public partial class DeviceStatusView : UserControl
     {

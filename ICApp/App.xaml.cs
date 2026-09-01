@@ -6,6 +6,9 @@ using Prism.Unity;
 using System.Windows;
 using Data;
 using Vision;
+using Motion;
+using ICApp.Views;
+using ICApp.ViewModels;
 
 namespace ICApp
 {
@@ -15,6 +18,7 @@ namespace ICApp
         {
             moduleCatalog.AddModule<DataModule>();
             moduleCatalog.AddModule<VisionModule>();
+            moduleCatalog.AddModule<MotionModule>();
         }
 
         protected override Window CreateShell()
@@ -26,6 +30,9 @@ namespace ICApp
         {
             containerRegistry.RegisterSingleton<ILogService, LogService>();
             containerRegistry.RegisterSingleton<IConfigService, ConfigService>();
+
+            containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
+
         }
 
         protected override void OnStartup(StartupEventArgs e)

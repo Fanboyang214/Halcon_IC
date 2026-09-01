@@ -1,6 +1,6 @@
 using Prism.Mvvm;
 
-namespace Vision.ViewModels
+namespace ICApp.ViewModels
 {
     public class DeviceStatusViewModel : BindableBase
     {
