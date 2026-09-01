@@ -5,7 +5,6 @@ using HalconDotNet;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
-using Prism.Navigation;
 using Prism.Services.Dialogs;
 using System;
 using System.IO;
@@ -20,7 +19,7 @@ namespace Vision.ViewModels
     /// 编排相机采集→模板创建/加载→检测→结果显示。
     /// 使用 HSmartWindowControlWPF + HWindow.DispObj 显示。
     /// </summary>
-    public class VisionWindowViewModel : BindableBase,IDestructible
+    public class VisionWindowViewModel : BindableBase
     {
         private readonly ICameraService _camera;
         private readonly ITemplateService _template;
@@ -29,7 +28,6 @@ namespace Vision.ViewModels
         private readonly ILogService _logger;
         private readonly IConfigService _config;
         private readonly IDialogService _dialogService;
-        
 
         // Template 框选结果
         private double _templateRow1,_templateColumn1,_templateRow2,_templateColumn2;
@@ -256,7 +254,7 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld1 = ho_r2Rectangle;
-                IsCheckXld1Created = true;
+                _isCheckXld1Drawn = true;
                 AddLog("INFO", "检测区域1设置成功");
                 await ShowInfoDialogAsync("检测区域1设置成功");
             }
@@ -269,7 +267,7 @@ namespace Vision.ViewModels
                     _checkXld1?.Dispose();
                 }
                 _checkXld1 = null;
-                IsCheckXld1Created = false;
+                _isCheckXld1Drawn = false;
             }
         }
 
@@ -287,8 +285,8 @@ namespace Vision.ViewModels
                 HOperatorSet.GenRectangle2ContourXld(out HObject ho_r2Rectangle, hv_r3Row, hv_r3Column, hv_r3Phi, hv_r3Length1, hv_r3Length2);
                 if (ho_r2Rectangle == null || !ho_r2Rectangle.IsInitialized())
                 {
-                    AddLog("ERROR", "生成检测区域2失败: 坐标或尺寸无效");
-                    await ShowErrorDialogAsync("生成检测区域2失败，请检查绘制的坐标和尺寸");
+                    AddLog("ERROR", "生成检测区域1失败: 坐标或尺寸无效");
+                    await ShowErrorDialogAsync("生成检测区域1失败，请检查绘制的坐标和尺寸");
                     return;
                 }
 
@@ -298,20 +296,20 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld2 = ho_r2Rectangle;
-                IsCheckXld2Created = true;
-                AddLog("INFO", "检测区域2设置成功");
-                await ShowInfoDialogAsync("检测区域2设置成功");
+                _isCheckXld2Drawn = true;
+                AddLog("INFO", "检测区域1设置成功");
+                await ShowInfoDialogAsync("检测区域1设置成功");
             }
             catch (Exception ex)
             {
-                AddLog("ERROR", $"设置检测区域2失败: {ex.Message}");
-                MessageBox.Show($"设置检测区域2失败：{ex.Message}");
+                AddLog("ERROR", $"设置检测区域1失败: {ex.Message}");
+                MessageBox.Show($"设置检测区域1失败：{ex.Message}");
                 if (_checkXld2 != null && _checkXld2.IsInitialized())
                 {
                     _checkXld2?.Dispose();
                 }
                 _checkXld2 = null;
-                IsCheckXld1Created = false;
+                _isCheckXld2Drawn = false;
             }
         }
 
@@ -373,7 +371,7 @@ namespace Vision.ViewModels
             AddLog("INFO", "相机正在关闭...");
             try
             {
-                if (IsDetecting) await  ExecuteStopDetect();
+                if (IsDetecting)  ExecuteStopDetect();
 
                 await Task.Run(() =>
                 {
@@ -400,13 +398,13 @@ namespace Vision.ViewModels
                     _checkXld1.Dispose();
                 }
                 _checkXld1 = null;
-                IsCheckXld1Created = false;
+                _isCheckXld1Drawn = false;
                 if(_checkXld2  != null && _checkXld2.IsInitialized() )
                 {
                     _checkXld2.Dispose();
                 }
                 _checkXld2 = null;
-                IsCheckXld1Created = false;
+                _isCheckXld2Drawn = false;
 
                 AddLog("INFO", "相机关闭完成，所有资源已释放");
                 await ShowInfoDialogAsync("相机关闭完成，所有资源已释放", "通知");
@@ -477,7 +475,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像或未绘制模板\n请先打开相机,确保画面有图像，并绘制模板");
                 return;
             }
-            if (IsCheckXld1Created)
+            if (_isCheckXld1Drawn)
             {
 
                 AddLog("WARN", "检测区域1已存在");
@@ -497,13 +495,13 @@ namespace Vision.ViewModels
 
         private async Task ExecuteCreateCheckXld2()
         {
-            if (!IsCameraOpen || !IsTemplateCreated || !IsCheckXld1Created)
+            if (!IsCameraOpen || !_isTemplateDrawn || !_isCheckXld1Drawn)
             {
                 AddLog("ERROR", "绘制检测区域2失败: 请先创建模板和检测区域1");
                 await ShowErrorDialogAsync("绘制检测区域2失败: 请先创建模板和检测区域1");
                 return;
             }
-            if (IsCheckXld2Created)
+            if (_isCheckXld2Drawn)
             {
                 AddLog("WARN", "检测区域2已存在");
                 await ShowWarningDialogAsync("检测区域2已存在");
@@ -543,14 +541,9 @@ namespace Vision.ViewModels
 
         }
 
-        // 模板文件存储目录，位于程序根目录下的Templates文件夹
-
-        private static readonly string TemplatesDir = System.IO.Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Templates");
-
         private async Task ExecuteLoadTemplate()
         {
-            
+           
             if (!Directory.Exists(TemplatesDir))
             {
                 AddLog("WARN", "模板目录加载失败，未找到模板目录");
@@ -558,8 +551,8 @@ namespace Vision.ViewModels
             }
 
             FileItem templateJson = null;
-            templateJson =( await ShowFileListDialogAsync(TemplatesDir)).templateJson;
-            if (templateJson == null || new FileInfo(templateJson.FullPath).Length == 0)
+            await ShowFileListDialogAsync(TemplatesDir, out templateJson);
+            if (templateJson == null || Directory.GetFiles(templateJson.FullPath).LongLength == 0)
             {
                 AddLog("WARN", "模板加载失败，模板为空");
                 await ShowWarningDialogAsync("模板加载失败，模板为空");
@@ -593,7 +586,7 @@ namespace Vision.ViewModels
 
                 if (IsDetecting)
                 {
-                  await  ExecuteStopDetect();
+                    ExecuteStopDetect();
                 }
 
                 IsTemplateCreated = false;
@@ -623,7 +616,10 @@ namespace Vision.ViewModels
 
         }
 
-       
+        // 模板文件存储目录，位于程序根目录下的Templates文件夹
+
+        private static readonly string TemplatesDir = System.IO.Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "Templates");
         private async Task ExecuteSaveTemplate()
         {
             if (!IsTemplateCreated)
@@ -739,7 +735,7 @@ namespace Vision.ViewModels
         private async Task ExecuteStartDetect()
         {
             AddLog("INFO", "启动实时检测...");
-            await ExecuteStopDetect();
+            ExecuteStopDetect();
 
             if (_camera == null || _template == null || _detection == null)
             {
@@ -760,7 +756,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("模板未创建，请先绘制模板");
                 return;
             }
-            if (!IsCheckXld1Created || !IsCheckXld1Created || _checkXld1 == null || _checkXld2 == null)
+            if (!_isCheckXld1Drawn || !_isCheckXld2Drawn || _checkXld1 == null || _checkXld2 == null)
             {
                 AddLog("ERROR", "启动检测失败: 检测区域未完整绘制");
                 await ShowErrorDialogAsync("请先绘制检测区域");
@@ -851,7 +847,6 @@ namespace Vision.ViewModels
             System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 OnDetectionResult(result);
-                _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
             });
         }
 
@@ -936,8 +931,7 @@ namespace Vision.ViewModels
             CloseCameraCmd.RaiseCanExecuteChanged();
             StartGrabCmd.RaiseCanExecuteChanged();
             StopGrabCmd.RaiseCanExecuteChanged();
-            CreateCheckXld1Cmd.RaiseCanExecuteChanged();
-            CreateCheckXld2Cmd.RaiseCanExecuteChanged();
+   
             CreateTemplateCmd.RaiseCanExecuteChanged();
             LoadTemplateCmd.RaiseCanExecuteChanged();
             SaveTemplateCmd.RaiseCanExecuteChanged();
@@ -973,7 +967,7 @@ namespace Vision.ViewModels
                     return;
                 }
 
-                IsTemplateCreated = true;
+                _isTemplateDrawn = true;
                 AddLog("INFO", "芯片模板创建成功");
                 await ShowInfoDialogAsync("模板创建成功");
             }
@@ -982,7 +976,7 @@ namespace Vision.ViewModels
                 AddLog("ERROR", $"设置模板区域失败: {ex.Message}");
                 await ShowErrorDialogAsync($"设置模板区域失败：{ex.Message}");
                 _template.ClearTemplate();
-                IsTemplateCreated = false;
+                _isTemplateDrawn = false;
             }
         }
 
@@ -1028,8 +1022,7 @@ namespace Vision.ViewModels
             var parameters = new DialogParameters
             {
                 { "title", title },
-                { "content", message },
-               
+                { "content", message }
             };
 
             _dialogService.ShowDialog(
@@ -1098,36 +1091,29 @@ namespace Vision.ViewModels
             return tcs.Task;
         }
 
-        private async Task<(bool success,FileItem templateJson)> ShowFileListDialogAsync( string filePath) 
+        private Task<bool> ShowFileListDialogAsync( string filePath,out FileItem templateJson) 
         {
-            var tcs = new TaskCompletionSource<FileItem>();
+            var tcs = new TaskCompletionSource<bool>();
             var parameters = new DialogParameters
             {
-                { "FolderPath", filePath  }
+                { "FolderPath", @filePath  }
             };
-            
-            _dialogService.ShowDialog("FileDialogView",parameters,
+            FileItem fileItem = null;
+            _dialogService.ShowDialog("FileListDialogView",
                 result =>
                 {
                     if (result.Result == ButtonResult.OK)
                     {
-                        var fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
-                        tcs.SetResult(fileItem);
+                        fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
+                        tcs.SetResult(true);
                     }
                     else
                     {
-                        tcs.SetResult(null);
+                        fileItem = null;
                     }
                 });
-            var templateJson =await tcs.Task;
-            return (templateJson != null, templateJson);
-        }
-
-        public void Destroy()
-        {
-            _eventAggregator.GetEvent<ImageGrabbedEvent>().Unsubscribe(_grabSubToken);
-            _grabSubToken?.Dispose();
-            _grabSubToken = null;
+            templateJson = fileItem;
+            return tcs.Task;
         }
 
         #endregion

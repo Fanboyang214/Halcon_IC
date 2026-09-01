@@ -1,4 +1,7 @@
-﻿using Motion.ViewModels;
+using Core.Interfaces;
+using Infrastruce.Services;
+using Motion.Services;
+using Motion.ViewModels;
 using Motion.Views;
 using Prism.Ioc;
 using Prism.Modularity;
@@ -19,8 +22,9 @@ namespace Motion
 
         public void RegisterTypes(IContainerRegistry containerRegistry)
         {
-
-            containerRegistry.RegisterForNavigation<MotionControlView,MotionControlViewModel>();
+            containerRegistry.RegisterSingleton<IMotionControlService, MotionControlService>();
+            containerRegistry.RegisterSingleton<ILogService,LogService>();
+            containerRegistry.RegisterForNavigation<MotionControlView, MotionControlViewModel>();
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Core.Events;
+using Core.Events;
 using Core.Interfaces;
 using Core.Models;
 using Prism.Commands;
@@ -21,14 +21,14 @@ namespace Motion.ViewModels
         private IEventAggregator _eventAggregator;
         
         private string _speed = "3000";
-        private MotionStatus _status;
+        private MotionStatus _status = new MotionStatus();
 
         #region 命令
-        public DelegateCommand ConnectCommand;
-        public DelegateCommand SevonCommand;
-        public DelegateCommand VmoveCommand;
-        public DelegateCommand VstopCommand;
-        public DelegateCommand ChangeSpeedCommand;
+        public DelegateCommand ConnectCommand { get; }
+        public DelegateCommand SevonCommand { get; }
+        public DelegateCommand VmoveCommand { get; }
+        public DelegateCommand VstopCommand { get; }
+        public DelegateCommand ChangeSpeedCommand { get; }
 
 
         #endregion
@@ -169,11 +169,16 @@ namespace Motion.ViewModels
                     AddLog("ERROR", "运动控制卡连接失败，请检查：1.控制卡电源 2.网线连接 3.IP地址(192.168.5.11)");
                     await ShowErrorDialogAsync("运动控制卡连接失败！\\n\\n请检查：\\n1. 控制卡是否上电\\n2. 网线是否连接\\n3. IP地址是否为192.168.5.11\\n4. 本机IP是否在同一网段\", \"连接失败");
                 }
-                _eventAggregator.GetEvent<MotionStatusEvent>().Publish(_status);
+               
             }catch (Exception ex)
             {
+                _status.ConnectStatus = 2;
                 AddLog("ERROR", $"运动控制卡连接异常：{ex.Message}");
                 await ShowErrorDialogAsync($"运动控制卡连接异常：{ex.Message}");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<MotionStatusEvent>().Publish(_status);
             }
            
               

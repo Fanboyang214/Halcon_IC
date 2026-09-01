@@ -14,7 +14,7 @@ namespace ICApp.Converters
                 return b switch
                 {
                     0 => Brushes.Green,
-                    1 => Brushes.Gray,
+                    1 => Brushes.DarkGray,
                     _ => Brushes.Yellow
                 };
             }
