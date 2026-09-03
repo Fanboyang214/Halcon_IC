@@ -267,63 +267,50 @@ namespace Vision.Views
             DisplayImage(image);
         }
 
-        /// <summary>
-        /// ViewModel 检测结果更新回调：在 Halcon 窗口绘制检测结果图像。
-        /// </summary>
-        private void OnDetectionResultUpdated(DetectionResult result)
-        {
-            // 显示检测结果叠加图
-            if (result.DisplayImage != null)
-            {
-                try
-                {
-                    DisplayImage(result.DisplayImage);
-                }
-                finally
-                {
-                    result.DisplayImage.Dispose();
-                }
-            }
+        ///// <summary>
+        ///// ViewModel 检测结果更新回调：在 Halcon 窗口绘制检测结果图像。
+        ///// </summary>
+        //private void OnDetectionResultUpdated(DetectionResult result)
+        //{
+        //    // 显示模板轮廓（绿色）
+        //    if (result.ModelContours != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.ModelContours, "green");
+        //        }
+        //        finally
+        //        {
+        //            result.ModelContours.Dispose();
+        //        }
+        //    }
 
-            // 显示模板轮廓（绿色）
-            if (result.ModelContours != null)
-            {
-                try
-                {
-                    DisplayOverlay(result.ModelContours, "green");
-                }
-                finally
-                {
-                    result.ModelContours.Dispose();
-                }
-            }
+        //    // 显示检测区域一（合格=青色，不合格=红色）
+        //    if (result.DetectionRegion1 != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
+        //        }
+        //        finally
+        //        {
+        //            result.DetectionRegion1.Dispose();
+        //        }
+        //    }
 
-            // 显示检测区域一（合格=青色，不合格=红色）
-            if (result.DetectionRegion1 != null)
-            {
-                try
-                {
-                    DisplayOverlay(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
-                }
-                finally
-                {
-                    result.DetectionRegion1.Dispose();
-                }
-            }
-
-            // 显示检测区域二（合格=青色，不合格=红色）
-            if (result.DetectionRegion2 != null)
-            {
-                try
-                {
-                    DisplayOverlay(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
-                }
-                finally
-                {
-                    result.DetectionRegion2.Dispose();
-                }
-            }
-        }
+        //    // 显示检测区域二（合格=青色，不合格=红色）
+        //    if (result.DetectionRegion2 != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
+        //        }
+        //        finally
+        //        {
+        //            result.DetectionRegion2.Dispose();
+        //        }
+        //    }
+        //}
 
         /// <summary>
         /// 在 Halcon 窗口显示图像（满窗口适配）。
