@@ -34,7 +34,7 @@ namespace Vision.Views
             if (DataContext is VisionWindowViewModel vm)
             {
                 vm.ImageGrabbed += OnImageGrabbed;
-                vm.DetectionResultUpdated += OnDetectionResultUpdated;
+                //vm.DetectionResultUpdated += OnDetectionResultUpdated;
                 vm.RequestTemplateCreate += OnRequestTemplateCreate;
                 vm.RequestCheckXld1Create += OnRequestCheckXld1Create;
                 vm.RequestCheckXld2Create += OnRequestCheckXld2Create;
@@ -364,7 +364,7 @@ namespace Vision.Views
             if (DataContext is VisionWindowViewModel vm)
             {
                 vm.ImageGrabbed -= OnImageGrabbed;
-                vm.DetectionResultUpdated -= OnDetectionResultUpdated;
+                //vm.DetectionResultUpdated -= OnDetectionResultUpdated;
                 vm.RequestTemplateCreate -= OnRequestTemplateCreate;
                 vm.RequestCheckXld1Create -= OnRequestCheckXld1Create;
                 vm.RequestCheckXld2Create -= OnRequestCheckXld2Create;
