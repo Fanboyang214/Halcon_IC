@@ -1,4 +1,4 @@
-﻿using Core.Interfaces;
+using Core.Interfaces;
 using Device_Link_LTSMC;
 using System;
 using System.Collections.Generic;
@@ -50,7 +50,12 @@ namespace Motion.Services
             return res == 0;
         }
 
-         public short LastErrorCode
+        public void Dispose()
+        {
+            
+        }
+
+        public short LastErrorCode
         {
             get;
             private set;

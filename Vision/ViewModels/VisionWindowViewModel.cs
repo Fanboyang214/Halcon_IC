@@ -34,10 +34,6 @@ namespace Vision.ViewModels
         private double _checkRect1Row, _checkRect1Column ,_checkRect1Phi, _checkRect1Length1,_checkRect1Length2;
         private double _checkRect2Row, _checkRect2Column ,_checkRect2Phi, _checkRect2Length1,_checkRect2Length2;
         
-        private bool _isTemplateDrawn;
-        private bool _isCheckXld1Drawn;
-        private bool _isCheckXld2Drawn;
-
         // 绑定属性
         private string _statusText = "就绪";
         private string _resultText = "";
@@ -64,8 +60,13 @@ namespace Vision.ViewModels
 
         // 订阅令牌
         private Prism.Events.SubscriptionToken? _grabSubToken;
+        private Prism.Events.SubscriptionToken? _sensorToken;
 
-      
+        // 传感器触发状态（由 Motion 模块通过 SensorTriggeredEvent 设置）
+        private volatile bool _sensorTriggered;
+
+        private VisionStatus _visionStatus;
+
 
         /// <summary>
         /// Halcon 窗口引用（由 VisionWindow.xaml.cs 在 Loaded 时注入）。
@@ -154,6 +155,12 @@ namespace Vision.ViewModels
             }
         }
 
+        public VisionStatus Vision
+        {
+            get => _visionStatus;
+            set => SetProperty(ref _visionStatus, value);
+        }
+
         #endregion
 
         #region 命令
@@ -209,7 +216,7 @@ namespace Vision.ViewModels
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _dialogService = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
-            
+            _visionStatus = new VisionStatus();
 
             OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
             CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
@@ -224,7 +231,9 @@ namespace Vision.ViewModels
             StartDetectCmd = new DelegateCommand(async()=>await ExecuteStartDetect(), () => IsTemplateCreated && !IsDetecting);
             StopDetectCmd = new DelegateCommand(async()=> await ExecuteStopDetect(), () => IsDetecting);
 
-            
+            // 订阅 Motion 模块发布的传感器触发事件
+            _sensorToken = _eventAggregator.GetEvent<SensorTriggeredEvent>()
+                .Subscribe(_ => _sensorTriggered = _.SensorStatue == 0 ? true : false, ThreadOption.UIThread);
         }
 
         
@@ -254,7 +263,7 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld1 = ho_r2Rectangle;
-                _isCheckXld1Drawn = true;
+                IsCheckXld1Created = true;
                 AddLog("INFO", "检测区域1设置成功");
                 await ShowInfoDialogAsync("检测区域1设置成功");
             }
@@ -267,7 +276,7 @@ namespace Vision.ViewModels
                     _checkXld1?.Dispose();
                 }
                 _checkXld1 = null;
-                _isCheckXld1Drawn = false;
+                IsCheckXld1Created = false;
             }
         }
 
@@ -296,7 +305,7 @@ namespace Vision.ViewModels
                 }
 
                 _checkXld2 = ho_r2Rectangle;
-                _isCheckXld2Drawn = true;
+                IsCheckXld2Created = true;
                 AddLog("INFO", "检测区域1设置成功");
                 await ShowInfoDialogAsync("检测区域1设置成功");
             }
@@ -309,7 +318,7 @@ namespace Vision.ViewModels
                     _checkXld2?.Dispose();
                 }
                 _checkXld2 = null;
-                _isCheckXld2Drawn = false;
+                IsCheckXld2Created = false;
             }
         }
 
@@ -344,12 +353,14 @@ namespace Vision.ViewModels
 
                 if (!_camera.IsOpen)
                 {
+                    _visionStatus.CameraStatus = 1;
                     AddLog("ERROR", "相机打开失败：设备未响应");
                     await  ShowErrorDialogAsync("相机打开失败！设备未响应\n\n请检查：\n1. 相机是否上电\n2. 网线是否连接\n3. 相机IP是否可达\n4. Halcon是否正确安装", "错误");
                     return;
                 }
                
                 IsCameraOpen = true;
+                _visionStatus.CameraStatus = 0;
                 
 
                 _grabSubToken?.Dispose();
@@ -359,10 +370,14 @@ namespace Vision.ViewModels
             }
             catch (Exception ex)
             {
-                
+                _visionStatus.CameraStatus = 1;
                 AddLog("ERROR", $"相机打开失败: {ex.Message}");
                 await ShowErrorDialogAsync($"相机打开失败：{ex.Message}", "错误");
 
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
@@ -371,7 +386,7 @@ namespace Vision.ViewModels
             AddLog("INFO", "相机正在关闭...");
             try
             {
-                if (IsDetecting)  ExecuteStopDetect();
+                if (IsDetecting) ExecuteStopDetect();
 
                 await Task.Run(() =>
                 {
@@ -379,42 +394,47 @@ namespace Vision.ViewModels
                 });
                 AddLog("DEBUG", "相机设备已关闭");
                 IsCameraOpen = false;
+                _visionStatus.CameraStatus = 1;
 
                 await Task.Run(() =>
                 {
                     _template.ClearTemplate();
                 });
                 AddLog("DEBUG", "模板数据已清除");
-                
-                if(_lastFrame != null && _lastFrame.IsInitialized())
+
+                if (_lastFrame != null && _lastFrame.IsInitialized())
                 {
                     _lastFrame.Dispose();
                 }
 
-               _lastFrame = null;
+                _lastFrame = null;
 
-                if(_checkXld1 != null && _checkXld1.IsInitialized())
+                if (_checkXld1 != null && _checkXld1.IsInitialized())
                 {
                     _checkXld1.Dispose();
                 }
                 _checkXld1 = null;
-                _isCheckXld1Drawn = false;
-                if(_checkXld2  != null && _checkXld2.IsInitialized() )
+                IsCheckXld1Created = false;
+                if (_checkXld2 != null && _checkXld2.IsInitialized())
                 {
                     _checkXld2.Dispose();
                 }
                 _checkXld2 = null;
-                _isCheckXld2Drawn = false;
+                IsCheckXld2Created = false;
 
                 AddLog("INFO", "相机关闭完成，所有资源已释放");
                 await ShowInfoDialogAsync("相机关闭完成，所有资源已释放", "通知");
-                
+
             }
             catch (Exception ex)
             {
-
+                _visionStatus.CameraStatus = 2;
                 AddLog("ERROR", $"相机关闭失败: {ex.Message}");
                 await ShowErrorDialogAsync("相机关闭失败", "错误");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
@@ -475,7 +495,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像或未绘制模板\n请先打开相机,确保画面有图像，并绘制模板");
                 return;
             }
-            if (_isCheckXld1Drawn)
+            if (IsCheckXld1Created)
             {
 
                 AddLog("WARN", "检测区域1已存在");
@@ -495,13 +515,13 @@ namespace Vision.ViewModels
 
         private async Task ExecuteCreateCheckXld2()
         {
-            if (!IsCameraOpen || !_isTemplateDrawn || !_isCheckXld1Drawn)
+            if (!IsCameraOpen || !IsTemplateCreated || !IsCheckXld1Created)
             {
                 AddLog("ERROR", "绘制检测区域2失败: 请先创建模板和检测区域1");
                 await ShowErrorDialogAsync("绘制检测区域2失败: 请先创建模板和检测区域1");
                 return;
             }
-            if (_isCheckXld2Drawn)
+            if (IsCheckXld2Created)
             {
                 AddLog("WARN", "检测区域2已存在");
                 await ShowWarningDialogAsync("检测区域2已存在");
@@ -586,12 +606,13 @@ namespace Vision.ViewModels
 
                 if (IsDetecting)
                 {
-                    ExecuteStopDetect();
+                    await ExecuteStopDetect();
                 }
 
                 IsTemplateCreated = false;
                 IsCheckXld1Created = false;
                 IsCheckXld2Created = false;
+                _visionStatus.TemplateStatus = 1;
 
                 SetTemplateRegion(config.TemplateRow1, config.TemplateColumn1, config.TemplateRow2, config.TemplateColumn2);
 
@@ -607,11 +628,20 @@ namespace Vision.ViewModels
 
                 AddLog("INFO", $"模板 \"{templateJson.Name}\" 已成功加载");
                 await ShowInfoDialogAsync($"模板 \"{templateJson.Name}\" 已成功加载");
+                IsTemplateCreated = true;
+                IsCheckXld1Created = true;
+                IsCheckXld2Created = true;
+                _visionStatus.TemplateStatus = 0;
             }
             catch(Exception ex)
             {
+                _visionStatus.TemplateStatus = 1;
                 AddLog("ERROR", $"加载模板失败：{ex.Message}");
                 await ShowErrorDialogAsync($"加载模板失败：{ex.Message}");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
 
         }
@@ -735,7 +765,7 @@ namespace Vision.ViewModels
         private async Task ExecuteStartDetect()
         {
             AddLog("INFO", "启动实时检测...");
-            ExecuteStopDetect();
+            await ExecuteStopDetect();
 
             if (_camera == null || _template == null || _detection == null)
             {
@@ -756,7 +786,7 @@ namespace Vision.ViewModels
                 await ShowErrorDialogAsync("模板未创建，请先绘制模板");
                 return;
             }
-            if (!_isCheckXld1Drawn || !_isCheckXld2Drawn || _checkXld1 == null || _checkXld2 == null)
+            if (!IsCheckXld1Created || !IsCheckXld2Created || _checkXld1 == null || _checkXld2 == null)
             {
                 AddLog("ERROR", "启动检测失败: 检测区域未完整绘制");
                 await ShowErrorDialogAsync("请先绘制检测区域");
@@ -773,12 +803,18 @@ namespace Vision.ViewModels
                 }
 
                 IsDetecting = true;
+                _visionStatus.DetectionStatus = 0;
                 AddLog("INFO", "实时检测已启动");
             }catch(Exception ex)
             {
                 AddLog("ERROR", $"启动实时检测失败: {ex.Message}");
                 await ShowErrorDialogAsync($"开始预览失败：{ex.Message}");
                 IsDetecting = false;
+                _visionStatus.DetectionStatus = 1;
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
@@ -792,12 +828,18 @@ namespace Vision.ViewModels
                     _detection.Stop(3000);
                 }
                 IsDetecting = false;
+                _visionStatus.DetectionStatus = 1;
                 AddLog("INFO", "实时检测已停止");
             }
             catch (Exception ex)
             {
+                _visionStatus.DetectionStatus = 2;
                 AddLog("ERROR", $"停止检测异常: {ex.Message}");
                 await ShowErrorDialogAsync($"停止检测异常: {ex.Message}");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
@@ -805,6 +847,7 @@ namespace Vision.ViewModels
 
         /// <summary>
         /// ImageGrabbedEvent 回调（已调度到 UI 线程）。
+        /// 仅当传感器触发后（_sensorTriggered == true）的第一帧执行检测，之后清标志。
         /// </summary>
         private void OnImageGrabbed(ImageGrabbedPayload payload)
         {
@@ -818,8 +861,12 @@ namespace Vision.ViewModels
                     _lastFrame = payload.Image.Clone();
                 }
 
-                if (IsDetecting)
+                // 仅当传感器触发且检测已开启时，才处理第一帧
+                if (IsDetecting && _sensorTriggered)
                 {
+                    _sensorTriggered = false;
+                    AddLog("INFO", "传感器触发，处理当前帧");
+
                     bool queued = _detection.EnqueueFrame(payload.Image);
                     if (!queued)
                     {
@@ -844,7 +891,7 @@ namespace Vision.ViewModels
         /// </summary>
         private void OnDetectionResultReady(DetectionResult result)
         {
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+            Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 OnDetectionResult(result);
             });
@@ -856,6 +903,9 @@ namespace Vision.ViewModels
             MatchScore = result.MatchScore;
             PinCount = result.PinCount;
             PinCount2 = result.PinCount2;
+
+            // 发布检测记录事件，供 DetectionRecordViewModel 订阅显示
+            _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
 
             if (HalconWindow == null) return;
 
@@ -925,6 +975,7 @@ namespace Vision.ViewModels
         {
             _logger.AddLog(level, message);
         }
+
         private void RefreshCommandStates()
         {
             OpenCameraCmd.RaiseCanExecuteChanged();
@@ -933,6 +984,8 @@ namespace Vision.ViewModels
             StopGrabCmd.RaiseCanExecuteChanged();
    
             CreateTemplateCmd.RaiseCanExecuteChanged();
+            CreateCheckXld1Cmd.RaiseCanExecuteChanged();
+            CreateCheckXld2Cmd.RaiseCanExecuteChanged();
             LoadTemplateCmd.RaiseCanExecuteChanged();
             SaveTemplateCmd.RaiseCanExecuteChanged();
             LoadReferenceImageCmd.RaiseCanExecuteChanged();
@@ -967,7 +1020,8 @@ namespace Vision.ViewModels
                     return;
                 }
 
-                _isTemplateDrawn = true;
+                IsTemplateCreated = true;
+                _visionStatus.TemplateStatus = 0;
                 AddLog("INFO", "芯片模板创建成功");
                 await ShowInfoDialogAsync("模板创建成功");
             }
@@ -976,7 +1030,12 @@ namespace Vision.ViewModels
                 AddLog("ERROR", $"设置模板区域失败: {ex.Message}");
                 await ShowErrorDialogAsync($"设置模板区域失败：{ex.Message}");
                 _template.ClearTemplate();
-                _isTemplateDrawn = false;
+                IsTemplateCreated = false;
+                _visionStatus.TemplateStatus = 1;
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 

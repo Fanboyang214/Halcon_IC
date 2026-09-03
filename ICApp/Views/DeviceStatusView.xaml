@@ -15,8 +15,25 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="相机" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FF43A047" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="已连接" FontSize="10" Foreground="#FF43A047" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Vision.CameraStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding Vision.CameraStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Vision.CameraStatus}" Value="0">
+                                        <Setter Property="Text" Value="已连接"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Vision.CameraStatus}" Value="1">
+                                        <Setter Property="Text" Value="未连接"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Vision.CameraStatus}" Value="2">
+                                        <Setter Property="Text" Value="连接失败"/>
+                                    </DataTrigger>
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
             <Grid Margin="0,3">
@@ -26,8 +43,25 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="模板" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FFBDBDBD" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="未创建" FontSize="10" Foreground="#FF888888" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Vision.TemplateStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding Vision.TemplateStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Vision.TemplateStatus}" Value="0">
+                                        <Setter Property="Text" Value="已创建"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Vision.TemplateStatus}" Value="1">
+                                        <Setter Property="Text" Value="未创建"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Vision.TemplateStatus}" Value="2">
+                                        <Setter Property="Text" Value="创建失败"/>
+                                    </DataTrigger>
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
             <Grid Margin="0,3">
@@ -37,8 +71,23 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="检测" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FFBDBDBD" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="空闲" FontSize="10" Foreground="#FF888888" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Vision.DetectionStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding Vision.DetectionStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Vision.DetectionStatus}" Value="0">
+                                        <Setter Property="Text" Value="检测中"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Vision.DetectionStatus}" Value="1">
+                                        <Setter Property="Text" Value="未检测"/>
+                                    </DataTrigger>
+                                    
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
             <Grid Margin="0,3">
@@ -127,8 +176,23 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="推料机构" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FFFB8C00" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="就绪" FontSize="10" Foreground="#FFFB8C00" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Motion.MoveStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding Motion.MoveStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Motion.MoveStatus}" Value="0">
+                                        <Setter Property="Text" Value="已触发"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Motion.MoveStatus}" Value="1">
+                                        <Setter Property="Text" Value="未触发"/>
+                                    </DataTrigger>
+
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
             <Grid Margin="0,3">
@@ -138,8 +202,23 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="传感器" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FFFB8C00" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="就绪" FontSize="10" Foreground="#FFFB8C00" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding SensorStatus.SensorStatue, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding SensorStatus.SensorStatue, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SensorStatus.SensorStatue}" Value="0">
+                                        <Setter Property="Text" Value="传感器触发"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SensorStatus.SensorStatue}" Value="1">
+                                        <Setter Property="Text" Value="传感器常态"/>
+                                    </DataTrigger>
+
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
             <Grid Margin="0,3">
@@ -149,8 +228,26 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="检查结果" FontSize="11" Foreground="#FF555555" VerticalAlignment="Center"/>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#FFFB8C00" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Text="就绪" FontSize="10" Foreground="#FFFB8C00" VerticalAlignment="Center"/>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Motion.MoveStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBlock  FontSize="10" Foreground="{Binding Motion.MoveStatus, Converter={StaticResource IntToColorConverter}}" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Motion.MoveStatus}" Value="0">
+                                        <Setter Property="Text" Value="OK"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Motion.MoveStatus}" Value="1">
+                                        <Setter Property="Text" Value="NG"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Motion.MoveStatus}" Value="2">
+                                        <Setter Property="Text" Value="NotFound"/>
+                                    </DataTrigger>
+
+
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
             </Grid>
         </StackPanel>

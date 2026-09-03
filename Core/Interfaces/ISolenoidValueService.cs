@@ -12,7 +12,7 @@ namespace Core.Interfaces
     /// 实现类：SolenoidValueService
     /// 用于剔除不合格芯片
     /// </summary>
-    public interface ISolenoidValueService
+    public interface ISolenoidValueService:IDisposable
     {
 
         /// <summary>

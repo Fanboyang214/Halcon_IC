@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,7 +11,7 @@ namespace Core.Interfaces
     /// 封装对运动控制卡（Leadshine LTSMC）的操作，包括连接、使能、运动、调速
     /// 通过接口抽象，ViewModel不依赖具体的硬件实现，便于测试和替换
     /// </summary>
-    public interface IMotionControlService
+    public interface IMotionControlService:IDisposable
     {
         /// <summary>
         /// 连接运动控制卡

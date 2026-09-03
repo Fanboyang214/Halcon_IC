@@ -16,6 +16,11 @@ namespace Motion.Services
             return res == 0;
         }
 
+        public void Dispose()
+        {
+
+        }
+
         public bool OpenValue()
         {
             int res = LTSMC.smc_write_outbit(0, 2, 0);

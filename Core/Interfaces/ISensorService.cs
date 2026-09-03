@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Core.Interfaces
 {
-    public interface ISensorService
+    public interface ISensorService:IDisposable
     {
 
         /// <summary>
@@ -15,6 +15,8 @@ namespace Core.Interfaces
         /// </summary>
         /// <returns>true=芯片经过（传感器触发），false=无芯片（传感器常态）</returns>
         public bool ReadSensorState();
+
+        public double ReadSensorPosition();
        
     }
 }
