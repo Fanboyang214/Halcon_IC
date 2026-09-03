@@ -87,8 +87,8 @@ namespace Vision.Services
         {
             if (image == null) throw new ArgumentNullException(nameof(image));
             if (IsTemplateCreated)
-                throw new InvalidOperationException("模板已创建，请先调用 ClearTemplate。");
-
+                //throw new InvalidOperationException("模板已创建，请先调用 ClearTemplate。");
+                 ClearTemplate();
             _row1 = row1; _column1 = column1; _row2 = row2; _column2 = column2;
 
             HObject? region = null;

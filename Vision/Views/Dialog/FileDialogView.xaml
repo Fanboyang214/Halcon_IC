@@ -1,0 +1,123 @@
+<UserControl x:Class="Vision.Views.Dialog.FileDialogView"
+              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+              xmlns:prism="http://prismlibrary.com/"
+              mc:Ignorable="d"
+              prism:ViewModelLocator.AutoWireViewModel="True"
+              d:DesignHeight="450" d:DesignWidth="600">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 当前路径 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="当前路径：" VerticalAlignment="Center" Foreground="Gray" />
+            <TextBlock Text="{Binding CurrentPath}" VerticalAlignment="Center"
+                   FontWeight="Bold" Margin="4,0,0,0" />
+        </StackPanel>
+
+        <!-- 文件列表 -->
+        <ListBox x:Name="FileList" Grid.Row="1"
+             ItemsSource="{Binding Items}"
+             SelectedItem="{Binding SelectedItem}"
+             MouseDoubleClick="ListBox_MouseDoubleClick"
+             ContextMenuOpening="ListBox_ContextMenuOpening"
+             BorderThickness="1" d:ItemsSource="{d:SampleData ItemCount=5}"
+             Background="LightCyan" BorderBrush="Black" 
+             ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" />
+            </ListBox.ItemContainerStyle>
+
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Margin="2">
+                        <TextBlock Text="{Binding Icon}" Width="24" />
+
+                        <!-- 名称（非重命名时显示） -->
+                        <TextBlock Text="{Binding Name}" Width="220" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <!-- 重命名输入框（仅重命名时显示） -->
+                        <TextBox Text="{Binding RenameText, UpdateSourceTrigger=PropertyChanged}"
+                             Width="220" VerticalAlignment="Center"
+                             Loaded="RenameTextBox_Loaded"
+                             PreviewKeyDown="RenameTextBox_KeyDown">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+
+                        <!-- 确认 / 取消 按钮（仅重命名时显示） -->
+                        <Button Content="✔" Width="28" Margin="4,0,0,0"
+                            Command="{Binding DataContext.CommitRenameCommand, ElementName=FileList}"
+                            CommandParameter="{Binding}">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <Button Content="✘" Width="28" Margin="4,0,0,0"
+                            Command="{Binding DataContext.CancelRenameCommand, ElementName=FileList}"
+                            CommandParameter="{Binding}">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <TextBlock Text="{Binding SizeText}" Width="80" VerticalAlignment="Center"
+                               Foreground="Gray" Margin="8,0,0,0" />
+                        <TextBlock Text="{Binding Modified, StringFormat={}{0:yyyy-MM-dd HH:mm}}"
+                               VerticalAlignment="Center" Foreground="Gray" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+        <!-- 底部操作 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal"
+                HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="选择" Command="{Binding SelectCommand}"
+                Width="80" Height="30" Margin="0,0,8,0" />
+            <Button Content="取消" Command="{Binding CancelCommand}"
+                Width="80" Height="30" />
+        </StackPanel>
+    </Grid>
+</UserControl>

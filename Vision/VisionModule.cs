@@ -1,4 +1,6 @@
+using Core.Events;
 using Core.Interfaces;
+using Prism.Events;
 using Prism.Ioc;
 using Prism.Modularity;
 using Prism.Regions;
@@ -9,16 +11,41 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Windows;
 using Vision.Services;
 using Vision.ViewModels;
+using Vision.ViewModels.Dialog;
 using Vision.Views;
+using Vision.Views.Dialog;
 
 namespace Vision
 {
     public class VisionModule : IModule
     {
+        private IEventAggregator _eventAggregator;
+        private SubscriptionToken _shutdownToken;
+        private ICameraService _camera;
+        private ITemplateService _template;
+        private IDetectionService _detection;
         public void OnInitialized(IContainerProvider containerProvider)
         {
+            _eventAggregator = containerProvider.Resolve<IEventAggregator>();
+            _camera = containerProvider.Resolve<ICameraService>();
+            _template = containerProvider.Resolve<ITemplateService>();
+            _detection = containerProvider.Resolve<IDetectionService>();
+            _shutdownToken = _eventAggregator.GetEvent<AppShutdownEvent>().Subscribe(OnShutdown, ThreadOption.UIThread, keepSubscriberReferenceAlive: true);
+
+        }
+
+        private void OnShutdown()
+        {
+
+
+            _camera?.Dispose();
+            _template?.Dispose();
+            _detection?.Dispose();
+
+
         }
 
         public void RegisterTypes(IContainerRegistry containerRegistry)
@@ -37,14 +64,20 @@ namespace Vision
             containerRegistry.RegisterSingleton<ITemplateService, TemplateService>();
             containerRegistry.RegisterSingleton<IDetectionService, DetectionService>();
 
+            containerRegistry.RegisterDialog<NotificationDialogView, NotificationDialogViewModel>();
+            containerRegistry.RegisterDialog<ConfirmationDialogView, ConfirmationDialogViewModel>();
+            containerRegistry.RegisterDialog<TemplateNameDialogView, TemplateNameDialogViewModel>();
+            //containerRegistry.RegisterDialog<FileListDialogView,FileListDialogViewModel>();
+            containerRegistry.RegisterDialog<FileDialogView, FileDialogViewModel>();
+
             containerRegistry.RegisterForNavigation<VisionWindow, VisionWindowViewModel>();
             containerRegistry.RegisterForNavigation<StatisticView, StatisticViewModel>();
-            containerRegistry.RegisterForNavigation<MotionControlView, MotionControlViewModel>();
-            containerRegistry.RegisterForNavigation<TemplatePanelView, TemplatePanelViewModel>();
-            containerRegistry.RegisterForNavigation<DetectionModuleView, DetectionModuleViewModel>();
+            //containerRegistry.RegisterForNavigation<MotionControlView, MotionControlViewModel>();
+            //containerRegistry.RegisterForNavigation<TemplatePanelView, TemplatePanelViewModel>();
+            //containerRegistry.RegisterForNavigation<DetectionModuleView, DetectionModuleViewModel>();
             containerRegistry.RegisterForNavigation<SystemLogView, SystemLogViewModel>();
             containerRegistry.RegisterForNavigation<DetectionRecordView, DetectionRecordViewModel>();
-            containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
+            //containerRegistry.RegisterForNavigation<DeviceStatusView, DeviceStatusViewModel>();
         }
 
         private static bool IsDirectShowConfigured()

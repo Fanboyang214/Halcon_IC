@@ -29,6 +29,8 @@ namespace Vision.Services
         private bool _running;
         private bool _disposed;
 
+        public event Action<DetectionResult>? ResultReady;
+
         public HDevelopExportDetectionService(ILogService logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

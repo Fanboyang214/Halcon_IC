@@ -5,8 +5,12 @@ using HalconDotNet;
 using Prism.Commands;
 using Prism.Events;
 using Prism.Mvvm;
+using Prism.Services.Dialogs;
 using System;
 using System.IO;
+using System.Windows;
+using Vision.Services;
+using Vision.ViewModels.Dialog;
 
 namespace Vision.ViewModels
 {
@@ -23,12 +27,13 @@ namespace Vision.ViewModels
         private readonly IEventAggregator _eventAggregator;
         private readonly ILogService _logger;
         private readonly IConfigService _config;
+        private readonly IDialogService _dialogService;
 
-        // ROI 框选结果
-        private double _roiRow1, _roiCol1, _roiRow2, _roiCol2;
-        private bool _hasRoi;
-        private bool _isRoiDrawing;
-
+        // Template 框选结果
+        private double _templateRow1,_templateColumn1,_templateRow2,_templateColumn2;
+        private double _checkRect1Row, _checkRect1Column ,_checkRect1Phi, _checkRect1Length1,_checkRect1Length2;
+        private double _checkRect2Row, _checkRect2Column ,_checkRect2Phi, _checkRect2Length1,_checkRect2Length2;
+        
         // 绑定属性
         private string _statusText = "就绪";
         private string _resultText = "";
@@ -37,11 +42,18 @@ namespace Vision.ViewModels
         private int _pinCount2;
         private bool _isDetecting;
         private bool _isCameraOpen;
+        
         private bool _isTemplateCreated;
+        private bool _isCheckXld1Created;
+        private bool _isCheckXld2Created;
 
         // 当前帧缓存
         private HObject? _lastFrame;
         private readonly object _frameLock = new();
+
+        private HObject? _checkXld1;
+        private HObject? _checkXld2;
+        
 
         // 检测配置
         private readonly InspectionConfig _inspectionConfig = new();
@@ -49,10 +61,8 @@ namespace Vision.ViewModels
         // 订阅令牌
         private Prism.Events.SubscriptionToken? _grabSubToken;
 
-        /// <summary>
-        /// Halcon 窗口引用（由 VisionWindow.xaml.cs 在 Loaded 时注入）。
-        /// </summary>
-        public HWindow? HalconWindow { get; set; }
+        private VisionStatus _visionStatus;
+
 
         #region 绑定属性
 
@@ -116,6 +126,32 @@ namespace Vision.ViewModels
             }
         }
 
+        public bool IsCheckXld1Created
+        {
+            get => _isCheckXld1Created;
+            set
+            {
+                SetProperty(ref _isCheckXld1Created, value);
+                RefreshCommandStates();
+            }
+        }
+
+        public bool IsCheckXld2Created
+        {
+            get => _isCheckXld2Created;
+            set
+            {
+                SetProperty(ref _isCheckXld2Created, value);
+                RefreshCommandStates();
+            }
+        }
+
+        public VisionStatus Vision
+        {
+            get => _visionStatus;
+            set => SetProperty(ref _visionStatus, value);
+        }
+
         #endregion
 
         #region 命令
@@ -124,13 +160,25 @@ namespace Vision.ViewModels
         public DelegateCommand CloseCameraCmd { get; }
         public DelegateCommand StartGrabCmd { get; }
         public DelegateCommand StopGrabCmd { get; }
-        public DelegateCommand DrawRoiCmd { get; }
+        
+        public DelegateCommand CreateCheckXld1Cmd { get; }
+        public DelegateCommand CreateCheckXld2Cmd { get; }
         public DelegateCommand CreateTemplateCmd { get; }
         public DelegateCommand LoadTemplateCmd { get; }
         public DelegateCommand SaveTemplateCmd { get; }
         public DelegateCommand LoadReferenceImageCmd { get; }
         public DelegateCommand StartDetectCmd { get; }
         public DelegateCommand StopDetectCmd { get; }
+
+        /// <summary>
+        /// 检测结果图像更新事件（由 View 订阅，处理 Halcon 窗口绘制）。
+        /// </summary>
+        public event Action<DetectionResult>? DetectionResultUpdated;
+
+        /// <summary>
+        /// 采集图像就绪事件（由 View 订阅，显示实时图像）。
+        /// </summary>
+        public event Action<HObject>? ImageGrabbed;
 
         /// <summary>
         /// 触发 ROI 绘制（由 View 订阅，使用 HDrawingObject 创建交互绘图对象）。
@@ -141,7 +189,21 @@ namespace Vision.ViewModels
         /// 请求清除 ROI 绘图对象（由 View 订阅，分离 HDrawingObject 并恢复显示）。
         /// </summary>
         public event Action? RequestClearRoi;
-
+        
+        /// <summary>
+        /// 触发模板区域绘制（由 View 订阅）。
+        /// </summary>
+        public event Action? RequestTemplateCreate;
+        
+        /// <summary>
+        /// 触发检测区域一绘制（由 View 订阅）。
+        /// </summary>
+        public event Action? RequestCheckXld1Create;
+        
+        /// <summary>
+        /// 触发检测区域二绘制（由 View 订阅）。
+        /// </summary>
+        public event Action? RequestCheckXld2Create;
         #endregion
 
         public VisionWindowViewModel(
@@ -150,7 +212,8 @@ namespace Vision.ViewModels
             IDetectionService detection,
             IEventAggregator eventAggregator,
             ILogService logger,
-            IConfigService config)
+            IConfigService config,
+            IDialogService dialog)
         {
             _camera = camera ?? throw new ArgumentNullException(nameof(camera));
             _template = template ?? throw new ArgumentNullException(nameof(template));
@@ -158,296 +221,519 @@ namespace Vision.ViewModels
             _eventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _dialogService = dialog ?? throw new ArgumentNullException(nameof(dialog));
 
-            OpenCameraCmd = new DelegateCommand(ExecuteOpenCamera, () => !IsCameraOpen);
-            CloseCameraCmd = new DelegateCommand(ExecuteCloseCamera, () => IsCameraOpen);
-            StartGrabCmd = new DelegateCommand(ExecuteStartGrab, () => IsCameraOpen && !IsDetecting);
-            StopGrabCmd = new DelegateCommand(ExecuteStopGrab, () => IsCameraOpen && !IsDetecting);
-            DrawRoiCmd = new DelegateCommand(ExecuteDrawRoi, () => !IsDetecting);
-            CreateTemplateCmd = new DelegateCommand(ExecuteCreateTemplate, () => IsCameraOpen && !IsDetecting);
-            LoadTemplateCmd = new DelegateCommand(ExecuteLoadTemplate, () => !IsDetecting);
-            SaveTemplateCmd = new DelegateCommand(ExecuteSaveTemplate, () => IsTemplateCreated);
+            _visionStatus = new VisionStatus();
+
+            OpenCameraCmd = new DelegateCommand(async()=>await ExecuteOpenCamera(), () => !IsCameraOpen);
+            CloseCameraCmd = new DelegateCommand( async() =>await  ExecuteCloseCamera(), () => IsCameraOpen);
+            StartGrabCmd = new DelegateCommand(async() => await ExecuteStartGrab(), () => IsCameraOpen && !IsDetecting);
+            StopGrabCmd = new DelegateCommand(async() =>await ExecuteStopGrab(), () => IsCameraOpen && !IsDetecting);
+            CreateCheckXld1Cmd = new DelegateCommand(async()=> await ExecuteCreateCheckXld1(), () => IsTemplateCreated );
+            CreateCheckXld2Cmd = new DelegateCommand(async()=>await ExecuteCreateCheckXld2(), () => IsTemplateCreated );
+            CreateTemplateCmd = new DelegateCommand(async() => await ExecuteCreateTemplate(), () => IsCameraOpen && !IsDetecting);
+            LoadTemplateCmd = new DelegateCommand(async()=> await ExecuteLoadTemplate(), () => !IsDetecting);
+            SaveTemplateCmd = new DelegateCommand(async()=>await ExecuteSaveTemplate(), () => IsTemplateCreated);
             LoadReferenceImageCmd = new DelegateCommand(ExecuteLoadReferenceImage, () => !IsDetecting);
-            StartDetectCmd = new DelegateCommand(ExecuteStartDetect, () => IsTemplateCreated && !IsDetecting);
-            StopDetectCmd = new DelegateCommand(ExecuteStopDetect, () => IsDetecting);
+            StartDetectCmd = new DelegateCommand(async()=>await ExecuteStartDetect(), () => IsTemplateCreated && !IsDetecting);
+            StopDetectCmd = new DelegateCommand(async()=> await ExecuteStopDetect(), () => IsDetecting);
         }
 
-        /// <summary>
-        /// 由 VisionWindow.xaml.cs 鼠标框选后调用。
-        /// row/col 为 Halcon 像素坐标。
-        /// </summary>
-        public void SetRoi(double row1, double col1, double row2, double col2)
-        {
-            _roiRow1 = row1; _roiCol1 = col1;
-            _roiRow2 = row2; _roiCol2 = col2;
-            _hasRoi = true;
-            StatusText = $"ROI: ({row1:F0},{col1:F0})-({row2:F0},{col2:F0})";
-            RefreshCommandStates();
-        }
+        
 
-        /// <summary>
-        /// 触发 View 创建 HDrawingObject 进行交互式 ROI 绘制。
-        /// </summary>
-        private void ExecuteDrawRoi()
+        public async Task SetCheckXld1(double hv_r2Row,double hv_r2Column,double hv_r2Length1,double hv_r2Length2,double hv_r2Phi)
         {
-            if (IsDetecting) return;
-            StatusText = "请在图像窗口中绘制/调整 ROI（HALCON 交互对象）";
-            RequestDrawRoi?.Invoke();
-        }
 
-        public void SetRoiDrawing(bool isDrawing)
-        {
-            _isRoiDrawing = isDrawing;
-            if (!isDrawing)
-            {
-                lock (_frameLock)
-                {
-                    if (_lastFrame != null && HalconWindow != null)
-                    {
-                        HalconWindow.SetPart(0, 0, -1, -1);
-                        HalconWindow.DispObj(_lastFrame);
-                    }
-                }
-            }
-        }
-
-        public bool TryGetLastFrame(out HObject? frame)
-        {
-            lock (_frameLock)
-            {
-                frame = _lastFrame;
-                return _lastFrame != null;
-            }
-        }
-
-        /// <summary>
-        /// 显示一帧图像到 Halcon 窗口。
-        /// </summary>
-        public void ShowImage(HObject image)
-        {
-            if (HalconWindow == null || image == null) return;
-            if (_isRoiDrawing) return;
             try
             {
-                HalconWindow.SetPart(0, 0, -1, -1);
-                HalconWindow.DispObj(image);
+                _checkRect1Row = hv_r2Row;
+                _checkRect1Column = hv_r2Column;
+                _checkRect1Phi = hv_r2Phi;
+                _checkRect1Length1 = hv_r2Length1;
+                _checkRect1Length2 = hv_r2Length2;
+
+                HOperatorSet.GenRectangle2ContourXld(out HObject ho_r2Rectangle, hv_r2Row, hv_r2Column, hv_r2Phi, hv_r2Length1, hv_r2Length2);
+                if (ho_r2Rectangle == null || !ho_r2Rectangle.IsInitialized())
+                {
+                    AddLog("ERROR", "生成检测区域1失败: 坐标或尺寸无效");
+                    await ShowErrorDialogAsync("生成检测区域1失败，请检查绘制的坐标和尺寸");
+                    return;
+                }
+
+                if (_checkXld1 != null && _checkXld1.IsInitialized())
+                {
+                    _checkXld1?.Dispose();
+                }
+
+                _checkXld1 = ho_r2Rectangle;
+                IsCheckXld1Created = true;
+                AddLog("INFO", "检测区域1设置成功");
+                await ShowInfoDialogAsync("检测区域1设置成功");
             }
             catch (Exception ex)
             {
-                _logger.AddLog("Error", $"显示图像异常: {ex.Message}");
+                AddLog("ERROR", $"设置检测区域1失败: {ex.Message}");
+                MessageBox.Show($"设置检测区域1失败：{ex.Message}");
+                if (_checkXld1 != null && _checkXld1.IsInitialized())
+                {
+                    _checkXld1?.Dispose();
+                }
+                _checkXld1 = null;
+                IsCheckXld1Created = false;
             }
         }
 
-        /// <summary>
-        /// 在 Halcon 窗口叠加显示轮廓/区域。
-        /// </summary>
-        public void ShowOverlay(HObject overlay)
+        public async Task SetCheckXld2(double hv_r3Row, double hv_r3Column, double hv_r3Length1, double hv_r3Length2, double hv_r3Phi)
         {
-            if (HalconWindow == null || overlay == null) return;
+
             try
             {
-                HalconWindow.SetColor("green");
-                HalconWindow.DispObj(overlay);
+                _checkRect2Row = hv_r3Row;
+                _checkRect2Column = hv_r3Column;
+                _checkRect2Phi = hv_r3Phi;
+                _checkRect2Length1 = hv_r3Length1;
+                _checkRect2Length2 = hv_r3Length2;
+
+                HOperatorSet.GenRectangle2ContourXld(out HObject ho_r2Rectangle, hv_r3Row, hv_r3Column, hv_r3Phi, hv_r3Length1, hv_r3Length2);
+                if (ho_r2Rectangle == null || !ho_r2Rectangle.IsInitialized())
+                {
+                    AddLog("ERROR", "生成检测区域1失败: 坐标或尺寸无效");
+                    await ShowErrorDialogAsync("生成检测区域1失败，请检查绘制的坐标和尺寸");
+                    return;
+                }
+
+                if (_checkXld2 != null && _checkXld2.IsInitialized())
+                {
+                    _checkXld2?.Dispose();
+                }
+
+                _checkXld2 = ho_r2Rectangle;
+                IsCheckXld2Created = true;
+                AddLog("INFO", "检测区域1设置成功");
+                await ShowInfoDialogAsync("检测区域1设置成功");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AddLog("ERROR", $"设置检测区域1失败: {ex.Message}");
+                MessageBox.Show($"设置检测区域1失败：{ex.Message}");
+                if (_checkXld2 != null && _checkXld2.IsInitialized())
+                {
+                    _checkXld2?.Dispose();
+                }
+                _checkXld2 = null;
+                IsCheckXld2Created = false;
+            }
         }
 
-        /// <summary>
-        /// 重新显示最后一帧（用于 ROI 清除后恢复正常显示）。
-        /// </summary>
-        private void RedisplayLastFrame()
-        {
-            if (HalconWindow == null) return;
-            lock (_frameLock)
-            {
-                if (_lastFrame != null)
-                {
-                    try
-                    {
-                        HalconWindow.SetPart(0, 0, -1, -1);
-                        HalconWindow.DispObj(_lastFrame);
-                    }
-                    catch { }
-                }
-            }
-        }
+
+
+
+
+
 
         #region 命令实现
 
-        private void ExecuteOpenCamera()
+        private async Task ExecuteOpenCamera()
         {
+            if (IsCameraOpen)
+            {
+                AddLog("WARN", "相机已打开");
+                return;
+            }
+            AddLog("INFO", "正在打开相机...");
             try
             {
                 var camSettings = _config.Camera;
-                _camera.Open(camSettings);
+
+                await Task.Run(() =>
+                {
+                    try { _camera.Open(camSettings); }
+                    catch (Exception ex)
+                    {
+                        throw new Exception($"相机打开失败：{ex.Message}");
+                    }
+                });
+
+                if (!_camera.IsOpen)
+                {
+                    _visionStatus.CameraStatus = 1;
+                    AddLog("ERROR", "相机打开失败：设备未响应");
+                    await  ShowErrorDialogAsync("相机打开失败！设备未响应\n\n请检查：\n1. 相机是否上电\n2. 网线是否连接\n3. 相机IP是否可达\n4. Halcon是否正确安装", "错误");
+                    return;
+                }
+               
                 IsCameraOpen = true;
-                StatusText = $"相机已连接 SN={camSettings.SerialNumber}";
+                _visionStatus.CameraStatus = 0;
+                
 
                 _grabSubToken?.Dispose();
                 _grabSubToken = _eventAggregator.GetEvent<ImageGrabbedEvent>()
                     .Subscribe(OnImageGrabbed, ThreadOption.UIThread);
+                AddLog("INFO", "相机已打开，等待采集...");
             }
             catch (Exception ex)
             {
-                StatusText = $"相机打开失败: {ex.Message}";
-                _logger.AddLog("Error", $"相机打开失败: {ex.Message}");
-            }
-        }
+                _visionStatus.CameraStatus = 1;
+                AddLog("ERROR", $"相机打开失败: {ex.Message}");
+                await ShowErrorDialogAsync($"相机打开失败：{ex.Message}", "错误");
 
-        private void ExecuteCloseCamera()
-        {
-            try
-            {
-                if (IsDetecting) ExecuteStopDetect();
-                _camera.Close();
-                IsCameraOpen = false;
-                StatusText = "相机关闭";
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"相机关闭异常: {ex.Message}";
-            }
-        }
-
-        private void ExecuteStartGrab()
-        {
-            try
-            {
-                _camera.StartGrabbing();
-                StatusText = "采集中...";
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"启动采集失败: {ex.Message}";
-            }
-        }
-
-        private void ExecuteStopGrab()
-        {
-            try
-            {
-                _camera.StopGrabbing();
-                StatusText = "采集停止";
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"停止采集异常: {ex.Message}";
-            }
-        }
-
-        private void ExecuteCreateTemplate()
-        {
-            HObject? frame;
-            lock (_frameLock) { frame = _lastFrame?.Clone(); }
-            if (frame == null)
-            {
-                StatusText = "无可用帧，请先采集或加载参考图";
-                return;
-            }
-            if (!_hasRoi)
-            {
-                StatusText = "请先在图像上框选 ROI";
-                frame.Dispose();
-                return;
-            }
-
-            try
-            {
-                _template.CreateTemplate(frame, _roiRow1, _roiCol1, _roiRow2, _roiCol2);
-                IsTemplateCreated = _template.IsTemplateCreated;
-                StatusText = $"模板创建成功 {_template.TemplateName}";
-                RefreshCommandStates();
-
-                // 清除 ROI 绘图对象，恢复正常采集显示
-                _isRoiDrawing = false;
-                RequestClearRoi?.Invoke();
-                RedisplayLastFrame();
-
-                if (_template.ModelContours != null)
-                    ShowOverlay(_template.ModelContours);
-            }
-            catch (Exception ex)
-            {
-                StatusText = $"模板创建失败: {ex.Message}";
-                _logger.AddLog("Error", $"模板创建失败: {ex.Message}");
             }
             finally
             {
-                frame.Dispose();
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
-        private void ExecuteLoadTemplate()
+        private async Task ExecuteCloseCamera()
         {
-            var dlg = new Microsoft.Win32.OpenFileDialog
+            AddLog("INFO", "相机正在关闭...");
+            try
             {
-                Filter = "模板配置 (*.json)|*.json",
-                InitialDirectory = GetModelDirectory()
-            };
-            if (dlg.ShowDialog() != true) return;
+                if (IsDetecting) ExecuteStopDetect();
+
+                await Task.Run(() =>
+                {
+                    _camera.Close();
+                });
+                AddLog("DEBUG", "相机设备已关闭");
+                IsCameraOpen = false;
+                _visionStatus.CameraStatus = 1;
+
+                await Task.Run(() =>
+                {
+                    _template.ClearTemplate();
+                });
+                AddLog("DEBUG", "模板数据已清除");
+
+                if (_lastFrame != null && _lastFrame.IsInitialized())
+                {
+                    _lastFrame.Dispose();
+                }
+
+                _lastFrame = null;
+
+                if (_checkXld1 != null && _checkXld1.IsInitialized())
+                {
+                    _checkXld1.Dispose();
+                }
+                _checkXld1 = null;
+                IsCheckXld1Created = false;
+                if (_checkXld2 != null && _checkXld2.IsInitialized())
+                {
+                    _checkXld2.Dispose();
+                }
+                _checkXld2 = null;
+                IsCheckXld2Created = false;
+
+                AddLog("INFO", "相机关闭完成，所有资源已释放");
+                await ShowInfoDialogAsync("相机关闭完成，所有资源已释放", "通知");
+
+            }
+            catch (Exception ex)
+            {
+                _visionStatus.CameraStatus = 2;
+                AddLog("ERROR", $"相机关闭失败: {ex.Message}");
+                await ShowErrorDialogAsync("相机关闭失败", "错误");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
+            }
+        }
+
+        private async Task ExecuteStartGrab()
+        {
+            if (_camera == null)
+            {
+                AddLog("ERROR", "开始采集失败: 相机服务未初始化");
+                await ShowErrorDialogAsync("相机服务未初始化", "错误");
+                return;
+            }
+
+            if (!IsCameraOpen || !_camera.IsOpen)
+            {
+                AddLog("ERROR", "开始采集失败: 相机未打开");
+                await ShowErrorDialogAsync("相机未打开，请先点击\"打开相机\"", "错误");
+                return;
+            }
+
+            if (_camera.IsGrabbing)
+            {
+                AddLog("WARN", "相机已在采集中");
+                return;
+            }
 
             try
             {
-                string json = File.ReadAllText(dlg.FileName);
-                var cfg = TemplateConfig.FromJson(json);
+                await Task.Run(() => { _camera.StartGrabbing(); });
+                AddLog("INFO", "相机图像采集已启动");
+            }
+            catch (Exception ex)
+            {
+                AddLog("ERROR", $"图像采集异常: {ex.Message}");
+                await ShowErrorDialogAsync($"图像采集异常：{ex.Message}", "错误");
+            }
+        }
 
-                string refImagePath = Path.ChangeExtension(dlg.FileName, ".png");
-                if (!File.Exists(refImagePath))
-                    refImagePath = Path.Combine(Path.GetDirectoryName(dlg.FileName)!, "ref.png");
+        private async Task ExecuteStopGrab()
+        {
+            try
+            {
+                await Task.Run(() => { _camera.StopGrabbing(); });
+                AddLog("INFO", "相机图像采集已停止");              
+            }
+            catch (Exception ex)
+            {
+                AddLog("ERROR", $"停止采集异常: {ex.Message}");
+                await ShowErrorDialogAsync($"停止采集异常：{ex.Message}", "错误");
+            }
+        }
 
-                if (!File.Exists(refImagePath))
+        private async Task ExecuteCreateCheckXld1()
+        {
+            AddLog("INFO", "开始绘制检测区域1...");
+            if (!IsCameraOpen || _lastFrame == null)
+            {
+                AddLog("ERROR", "绘制模板失败: 相机未打开或无图像或未绘制模板");
+                await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像或未绘制模板\n请先打开相机,确保画面有图像，并绘制模板");
+                return;
+            }
+            if (IsCheckXld1Created)
+            {
+
+                AddLog("WARN", "检测区域1已存在");
+                await ShowWarningDialogAsync("检测区域1已绘制，请勿重复绘制");
+                return;
+            }
+            try
+            {
+                AddLog("INFO", "请在图像窗口绘制检测区域1");
+                RequestCheckXld1Create?.Invoke();
+            } catch (Exception ex)
+            {
+                AddLog("ERROR",$"{ex.Message}");
+                await ShowErrorDialogAsync($"{ex.Message}");
+            }
+        }
+
+        private async Task ExecuteCreateCheckXld2()
+        {
+            if (!IsCameraOpen || !IsTemplateCreated || !IsCheckXld1Created)
+            {
+                AddLog("ERROR", "绘制检测区域2失败: 请先创建模板和检测区域1");
+                await ShowErrorDialogAsync("绘制检测区域2失败: 请先创建模板和检测区域1");
+                return;
+            }
+            if (IsCheckXld2Created)
+            {
+                AddLog("WARN", "检测区域2已存在");
+                await ShowWarningDialogAsync("检测区域2已存在");
+                return;
+            }
+            AddLog("INFO", "请在图像窗口绘制检测区域2");
+            RequestCheckXld2Create?.Invoke();
+        }
+
+        private async Task ExecuteCreateTemplate()
+        {
+            AddLog("INFO", "开始创建模板...");
+            if(!IsCameraOpen || _lastFrame == null)
+            {
+                AddLog("ERROR", "绘制模板失败: 相机未打开或无图像");
+                await ShowErrorDialogAsync("绘制模板失败: 相机未打开或无图像\n请先打开相机,确保画面有图像");
+                return;
+            }
+            if (_template.IsTemplateCreated)
+            {
+                AddLog("WARN", "模板已创建，请先清除再重新创建");
+                if(await ShowConfirmationDialogAsync("是否清除已创建模板"))
+                    await Task.Run(async()=> _template.ClearTemplate() );
+            }
+            AddLog("INFO", "请在图像窗口绘画模板区域");
+            try
+            {
+                 RequestTemplateCreate?.Invoke();
+            }catch(Exception ex)
+            {
+                AddLog("ERROR", $"{ex.Message}");
+                await ShowErrorDialogAsync($"{ex.Message}");
+            }
+           
+
+
+
+        }
+
+        private async Task ExecuteLoadTemplate()
+        {
+           
+            if (!Directory.Exists(TemplatesDir))
+            {
+                AddLog("WARN", "模板目录加载失败，未找到模板目录");
+                await ShowWarningDialogAsync("模板目录加载失败，未找到模板目录\n请先保存模板，创建模板目录", "警告");
+            }
+
+            FileItem templateJson = null;
+            await ShowFileListDialogAsync(TemplatesDir, out templateJson);
+            if (templateJson == null || Directory.GetFiles(templateJson.FullPath).LongLength == 0)
+            {
+                AddLog("WARN", "模板加载失败，模板为空");
+                await ShowWarningDialogAsync("模板加载失败，模板为空");
+                return;
+            }
+
+            if (!IsCameraOpen)
+            {
+                AddLog("WARN", "加载模板失败: 相机未打开");
+                await ShowWarningDialogAsync("加载模板失败: 相机未打开");
+                return;
+            }
+
+            if (_lastFrame == null || !_lastFrame.IsInitialized())
+            {
+                AddLog("WARN", "加载模板失败: 当前无有效图像");
+                await ShowWarningDialogAsync("加载模板失败: 当前无有效图像");
+                return;
+            }
+            
+            try
+            {
+                string json = File.ReadAllText(templateJson.FullPath, System.Text.Encoding.UTF8);
+                var config = TemplateConfig.FromJson(json);
+                if(config == null)
                 {
-                    StatusText = "找不到参考图，请用\"加载参考图\"手动选择";
+                    AddLog("ERROR", "加载模板失败: 配置文件内容无效");
+                    await ShowErrorDialogAsync("加载模板失败: 配置文件内容无效");
                     return;
                 }
 
-                var refImage = new HObject();
-                HOperatorSet.ReadImage(out refImage, refImagePath);
+                if (IsDetecting)
+                {
+                    await ExecuteStopDetect();
+                }
 
-                _template.LoadTemplate(cfg, refImage);
-                IsTemplateCreated = _template.IsTemplateCreated;
-                StatusText = $"模板已加载: {cfg.TemplateName}";
-                RefreshCommandStates();
+                IsTemplateCreated = false;
+                IsCheckXld1Created = false;
+                IsCheckXld2Created = false;
+                _visionStatus.TemplateStatus = 1;
 
-                ShowImage(refImage);
-                if (_template.ModelContours != null)
-                    ShowOverlay(_template.ModelContours);
+                SetTemplateRegion(config.TemplateRow1, config.TemplateColumn1, config.TemplateRow2, config.TemplateColumn2);
+
+                if (!_template.IsTemplateCreated)
+                {
+                    AddLog("ERROR", "加载模板失败: 模板重建失败");
+                    await ShowErrorDialogAsync("加载模板失败: 模板重建失败");
+                    return;
+                }
+                // 重建两个检测区域的旋转矩形
+                await SetCheckXld1(config.CheckRect1Row, config.CheckRect1Column, config.CheckRect1Phi, config.CheckRect1Length1, config.CheckRect1Length2);
+                await SetCheckXld2(config.CheckRect2Row, config.CheckRect2Column, config.CheckRect2Phi, config.CheckRect2Length1, config.CheckRect2Length2);
+
+                AddLog("INFO", $"模板 \"{templateJson.Name}\" 已成功加载");
+                await ShowInfoDialogAsync($"模板 \"{templateJson.Name}\" 已成功加载");
+                IsTemplateCreated = true;
+                IsCheckXld1Created = true;
+                IsCheckXld2Created = true;
+                _visionStatus.TemplateStatus = 0;
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
-                StatusText = $"加载模板失败: {ex.Message}";
-                _logger.AddLog("Error", $"加载模板失败: {ex.Message}");
+                _visionStatus.TemplateStatus = 1;
+                AddLog("ERROR", $"加载模板失败：{ex.Message}");
+                await ShowErrorDialogAsync($"加载模板失败：{ex.Message}");
             }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
+            }
+
         }
 
-        private void ExecuteSaveTemplate()
-        {
-            if (!IsTemplateCreated) return;
+        // 模板文件存储目录，位于程序根目录下的Templates文件夹
 
-            var dlg = new Microsoft.Win32.SaveFileDialog
+        private static readonly string TemplatesDir = System.IO.Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "Templates");
+        private async Task ExecuteSaveTemplate()
+        {
+            if (!IsTemplateCreated)
             {
-                Filter = "模板配置 (*.json)|*.json",
-                InitialDirectory = GetModelDirectory(),
-                FileName = $"{_template.TemplateName}.json"
-            };
-            if (dlg.ShowDialog() != true) return;
+                AddLog("WARN", "模板保存失败，模板未创建");
+                await ShowWarningDialogAsync("模板保存失败，模板未创建", "警告");
+                return;
+            }
+
+            if(!IsCheckXld1Created || !IsCheckXld2Created)
+            {
+                AddLog("WARN", "模板保存失败，检测区域未绘制");
+                await ShowWarningDialogAsync("模板保存失败，检测区域未绘制", "警告");
+                return;
+            }
+
+            string templateName = string.Empty;
+            await ShowTemplateNameDialogAsync(out templateName);
+            templateName=templateName.Trim();
+            if (string.IsNullOrWhiteSpace(templateName))
+            {
+                AddLog("WARN", "模板保存失败，模板名称不能为空");
+                await ShowWarningDialogAsync("模板保存失败，模板名称不能为空", "警告");
+                return;
+            }
+
+            foreach(var c in System.IO.Path.GetInvalidFileNameChars())
+            {
+                if (templateName.Contains(c))
+                {
+                    AddLog("WARN", "模板保存失败，模板名称不能含有非法字符（如 \\ / : * ? \" < > |）");
+                    await ShowWarningDialogAsync("模板保存失败，模板名称不能含有非法字符（如 \\ / : * ? \" < > |）", "警告");
+                    return;
+                }
+
+            }
 
             try
             {
-                var cfg = _template.ExportConfig();
-                Directory.CreateDirectory(GetModelDirectory());
-                File.WriteAllText(dlg.FileName, cfg.ToJson());
-                StatusText = $"模板已保存: {dlg.FileName}";
+                Directory.CreateDirectory(TemplatesDir);
+                var config = new TemplateConfig
+                {
+                    TemplateName = templateName,
+                    TemplateRow1 = _templateRow1,
+                    TemplateColumn1 = _templateColumn1,
+                    TemplateRow2 = _templateRow2,
+                    TemplateColumn2 = _templateColumn2,
+                    CheckRect1Row = _checkRect1Row,
+                    CheckRect1Column = _checkRect1Column,
+                    CheckRect1Phi = _checkRect1Phi,
+                    CheckRect1Length1 = _checkRect1Length1,
+                    CheckRect1Length2 = _checkRect1Length2,
+                    CheckRect2Row = _checkRect2Row,
+                    CheckRect2Column = _checkRect2Column,
+                    CheckRect2Phi = _checkRect2Phi,
+                    CheckRect2Length1 = _checkRect2Length1,
+                    CheckRect2Length2 = _checkRect2Length2
+                };
+                string filePath = Path.Combine(TemplatesDir, $"{templateName}.json");
+                if (Path.Exists(filePath))
+                {
+                   var result = await ShowConfirmationDialogAsync($"模板 \"{templateName}\" 已存在，是否覆盖？", "确认覆盖");
+                    if (!result)
+                    {
+                        AddLog("INFO", "保存模板已取消（不覆盖）");
+                        return;
+                    }
+                }
+                string templateJson = config.ToJson();
+                File.WriteAllText(filePath, templateJson, System.Text.Encoding.UTF8);
 
-                // 保存后清除 ROI 绘图对象，恢复正常采集显示
-                _isRoiDrawing = false;
-                RequestClearRoi?.Invoke();
-                RedisplayLastFrame();
-            }
-            catch (Exception ex)
+                AddLog("INFO", "模板保存成功");
+                await ShowInfoDialogAsync("模板保存成功");
+            }catch(Exception ex)
             {
-                StatusText = $"保存模板失败: {ex.Message}";
+                AddLog("ERROR", $"模板保存失败：{ex.Message}");
+                await ShowErrorDialogAsync($"模板保存失败：{ex.Message}");
             }
+
+
+
         }
 
         private void ExecuteLoadReferenceImage()
@@ -462,51 +748,98 @@ namespace Vision.ViewModels
             {
                 var img = new HObject();
                 HOperatorSet.ReadImage(out img, dlg.FileName);
-                ShowImage(img);
-
                 lock (_frameLock)
                 {
                     _lastFrame?.Dispose();
                     _lastFrame = img.Clone();
                 }
-                StatusText = $"参考图已加载: {Path.GetFileName(dlg.FileName)}";
+                AddLog("INFO", $"参考图已加载: {Path.GetFileName(dlg.FileName)}");
             }
             catch (Exception ex)
             {
-                StatusText = $"加载参考图失败: {ex.Message}";
+                //StatusText = $"加载参考图失败: {ex.Message}";
+                AddLog("ERROR", $"加载参考图失败: {ex.Message}");
             }
         }
 
-        private void ExecuteStartDetect()
+        private async Task ExecuteStartDetect()
         {
+            AddLog("INFO", "启动实时检测...");
+            await ExecuteStopDetect();
+
+            if (_camera == null || _template == null || _detection == null)
+            {
+                AddLog("ERROR", "启动检测失败: 服务未初始化");
+                await ShowErrorDialogAsync("服务未初始化，无法开始预览");
+                return;
+            }
+
+            if (!IsCameraOpen || !_camera.IsGrabbing)
+            {
+                AddLog("WARN", "启动实时检测失败：相机未打开或相机未采集");
+                return;
+            }
+
+            if(!_template.IsTemplateCreated || _template.ModelID == null || _template.ModelID.Length == 0)
+            {
+                AddLog("ERROR", "启动检测失败: 模板未创建");
+                await ShowErrorDialogAsync("模板未创建，请先绘制模板");
+                return;
+            }
+            if (!IsCheckXld1Created || !IsCheckXld2Created || _checkXld1 == null || _checkXld2 == null)
+            {
+                AddLog("ERROR", "启动检测失败: 检测区域未完整绘制");
+                await ShowErrorDialogAsync("请先绘制检测区域");
+                return;
+            }
             try
             {
                 _detection.Start(_template, _inspectionConfig);
+                _detection.ResultReady += OnDetectionResultReady;
 
                 if (!_camera.IsGrabbing)
-                    _camera.StartGrabbing();
+                {
+                    await ExecuteStartGrab();
+                }
 
                 IsDetecting = true;
-                StatusText = "检测中...";
-            }
-            catch (Exception ex)
+                _visionStatus.DetectionStatus = 0;
+                AddLog("INFO", "实时检测已启动");
+            }catch(Exception ex)
             {
-                StatusText = $"启动检测失败: {ex.Message}";
-                _logger.AddLog("Error", $"启动检测失败: {ex.Message}");
+                AddLog("ERROR", $"启动实时检测失败: {ex.Message}");
+                await ShowErrorDialogAsync($"开始预览失败：{ex.Message}");
+                IsDetecting = false;
+                _visionStatus.DetectionStatus = 1;
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
-        private void ExecuteStopDetect()
+        private async Task ExecuteStopDetect()
         {
             try
             {
-                _detection.Stop(3000);
+                if (_detection != null)
+                {
+                    _detection.ResultReady -= OnDetectionResultReady;
+                    _detection.Stop(3000);
+                }
                 IsDetecting = false;
-                StatusText = "检测停止";
+                _visionStatus.DetectionStatus = 1;
+                AddLog("INFO", "实时检测已停止");
             }
             catch (Exception ex)
             {
-                StatusText = $"停止检测异常: {ex.Message}";
+                _visionStatus.DetectionStatus = 2;
+                AddLog("ERROR", $"停止检测异常: {ex.Message}");
+                await ShowErrorDialogAsync($"停止检测异常: {ex.Message}");
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
             }
         }
 
@@ -514,12 +847,13 @@ namespace Vision.ViewModels
 
         /// <summary>
         /// ImageGrabbedEvent 回调（已调度到 UI 线程）。
+        /// 仅当传感器触发后（_sensorTriggered == true）的第一帧执行检测，之后清标志。
         /// </summary>
         private void OnImageGrabbed(ImageGrabbedPayload payload)
         {
             try
             {
-                ShowImage(payload.Image);
+                ImageGrabbed?.Invoke(payload.Image);
 
                 lock (_frameLock)
                 {
@@ -527,6 +861,7 @@ namespace Vision.ViewModels
                     _lastFrame = payload.Image.Clone();
                 }
 
+                // 实时检测：所有帧都进入检测服务，由状态机决定是否处理（上升沿才做完整检测）
                 if (IsDetecting)
                 {
                     bool queued = _detection.EnqueueFrame(payload.Image);
@@ -539,12 +874,24 @@ namespace Vision.ViewModels
             }
             catch (Exception ex)
             {
-                _logger.AddLog("Error", $"OnImageGrabbed 异常: {ex.Message}");
+                AddLog("ERROR", $"OnImageGrabbed 异常: {ex.Message}");
             }
             finally
             {
                 payload.Dispose();
             }
+        }
+
+        /// <summary>
+        /// DetectionService.ResultReady 事件回调。
+        /// 消费者线程发布，需要 marshal 到 UI 线程更新界面。
+        /// </summary>
+        private void OnDetectionResultReady(DetectionResult result)
+        {
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                OnDetectionResult(result);
+            });
         }
 
         private void OnDetectionResult(DetectionResult result)
@@ -554,53 +901,17 @@ namespace Vision.ViewModels
             PinCount = result.PinCount;
             PinCount2 = result.PinCount2;
 
-            if (HalconWindow == null) return;
+            // 注入模板名称，供数据入库使用
+            result.TemplateName = _template.TemplateName;
 
-            if (result.DisplayImage != null)
+            // 仅上升沿检测结果（ShouldTrigger=true）才发布事件供 Motion 模块消费
+            if (result.ShouldTrigger)
             {
-                HalconWindow.SetPart(0, 0, -1, -1);
-                HalconWindow.DispObj(result.DisplayImage);
-                result.DisplayImage.Dispose();
+                _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
             }
 
-            if (result.ModelContours != null)
-            {
-                try
-                {
-                    HalconWindow.SetColor("green");
-                    HalconWindow.DispObj(result.ModelContours);
-                }
-                finally
-                {
-                    result.ModelContours.Dispose();
-                }
-            }
-
-            if (result.DetectionRegion1 != null)
-            {
-                try
-                {
-                    HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    HalconWindow.DispObj(result.DetectionRegion1);
-                }
-                finally
-                {
-                    result.DetectionRegion1.Dispose();
-                }
-            }
-
-            if (result.DetectionRegion2 != null)
-            {
-                try
-                {
-                    HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    HalconWindow.DispObj(result.DetectionRegion2);
-                }
-                finally
-                {
-                    result.DetectionRegion2.Dispose();
-                }
-            }
+            // 通知 View 绘制检测结果图像（View 负责 Halcon 窗口绘制和 HObject 释放）
+            DetectionResultUpdated?.Invoke(result);
         }
 
         private string GetModelDirectory()
@@ -612,19 +923,212 @@ namespace Vision.ViewModels
             return dir;
         }
 
+        private void AddLog(string level,string message)
+        {
+            _logger.AddLog(level, message);
+        }
+
         private void RefreshCommandStates()
         {
             OpenCameraCmd.RaiseCanExecuteChanged();
             CloseCameraCmd.RaiseCanExecuteChanged();
             StartGrabCmd.RaiseCanExecuteChanged();
             StopGrabCmd.RaiseCanExecuteChanged();
-            DrawRoiCmd.RaiseCanExecuteChanged();
+   
             CreateTemplateCmd.RaiseCanExecuteChanged();
+            CreateCheckXld1Cmd.RaiseCanExecuteChanged();
+            CreateCheckXld2Cmd.RaiseCanExecuteChanged();
             LoadTemplateCmd.RaiseCanExecuteChanged();
             SaveTemplateCmd.RaiseCanExecuteChanged();
             LoadReferenceImageCmd.RaiseCanExecuteChanged();
             StartDetectCmd.RaiseCanExecuteChanged();
             StopDetectCmd.RaiseCanExecuteChanged();
         }
+
+        public async void SetTemplateRegion(double hv_mRow1, double hv_mColumn1, double hv_mRow2, double hv_mColumn2)
+        {
+            if (_lastFrame == null || !_lastFrame.IsInitialized())
+            {
+                AddLog("ERROR", "设置模板失败: 当前图像无效");
+                await ShowErrorDialogAsync("当前图像无效，无法创建模板，请确保相机正常采集图像");
+                return;
+            }
+
+            try
+            {
+                _templateRow1 = hv_mRow1;
+                _templateColumn1 = hv_mColumn1;
+                _templateRow2 = hv_mRow2;
+                _templateColumn2 = hv_mColumn2;
+
+                _template.SetTemplateRegion(hv_mRow1, hv_mColumn1, hv_mRow2, hv_mColumn2);
+                _template.CreateTemplate(_lastFrame, hv_mRow1, hv_mColumn1, hv_mRow2, hv_mColumn2);
+
+                if (!_template.IsTemplateCreated || _template.ModelID == null)
+                {
+                    AddLog("ERROR", "模板创建失败: ModelID无效");
+                    await ShowErrorDialogAsync("模板创建失败，ModelID无效");
+                    _template.ClearTemplate();
+                    return;
+                }
+
+                IsTemplateCreated = true;
+                _visionStatus.TemplateStatus = 0;
+                AddLog("INFO", "芯片模板创建成功");
+                await ShowInfoDialogAsync("模板创建成功");
+            }
+            catch (Exception ex)
+            {
+                AddLog("ERROR", $"设置模板区域失败: {ex.Message}");
+                await ShowErrorDialogAsync($"设置模板区域失败：{ex.Message}");
+                _template.ClearTemplate();
+                IsTemplateCreated = false;
+                _visionStatus.TemplateStatus = 1;
+            }
+            finally
+            {
+                _eventAggregator.GetEvent<VisionStatusEvent>().Publish(_visionStatus);
+            }
+        }
+
+
+        #region 对话框辅助方法（直接在 ViewModel 中）
+
+        private Task<bool> ShowConfirmationDialogAsync(string message, string title = "确认")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "message", message },
+                { "confirmText", "确定" },
+                { "cancelText", "取消" }
+            };
+
+            _dialogService.ShowDialog(
+                "ConfirmationDialogView",
+                parameters,
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        var confirmed = result.Parameters.GetValue<bool>("Confirmed");
+                        tcs.SetResult(confirmed);
+                    }
+                    else
+                    {
+                        tcs.SetResult(false);
+                    }
+                });
+
+            return tcs.Task;
+        }
+
+        private Task ShowInfoDialogAsync(string message, string title = "提示")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            // 使用 Prism 内置的 NotificationDialog
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialogView",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowErrorDialogAsync(string message, string title = "错误")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialogView",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task ShowWarningDialogAsync(string message, string title = "警告")
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var parameters = new DialogParameters
+            {
+                { "title", title },
+                { "content", message }
+            };
+
+            _dialogService.ShowDialog(
+                "NotificationDialogView",
+                parameters,
+                result => tcs.SetResult(true));
+
+            return tcs.Task;
+        }
+
+        private Task<bool> ShowTemplateNameDialogAsync(out string templateName)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            string name = null;
+            _dialogService.ShowDialog("TemplateNameDialogView",
+                result=>{
+                    if(result.Result == ButtonResult.OK)
+                    {
+                         name = result.Parameters.GetValue<string>("TemplateName");
+                         tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        name = string.Empty;
+                        tcs.SetResult(false);
+                    }
+
+                 });
+            templateName = name;
+            return tcs.Task;
+        }
+
+        private Task<bool> ShowFileListDialogAsync( string filePath,out FileItem templateJson) 
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            var parameters = new DialogParameters
+            {
+                { "FolderPath", @filePath  }
+            };
+            FileItem fileItem = null;
+            _dialogService.ShowDialog("FileListDialogView",
+                result =>
+                {
+                    if (result.Result == ButtonResult.OK)
+                    {
+                        fileItem = result.Parameters.GetValue<FileItem>("SelectedFile");
+                        tcs.SetResult(true);
+                    }
+                    else
+                    {
+                        fileItem = null;
+                    }
+                });
+            templateJson = fileItem;
+            return tcs.Task;
+        }
+
+        #endregion
     }
 }
+    
+

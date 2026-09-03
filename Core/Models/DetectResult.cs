@@ -14,6 +14,11 @@ namespace Core.Models
     /// </summary>
     public class DetectionResult
     {
+        public DateTime Time
+        {
+            get; set;
+        }
+
         /// <summary>
         /// 模板匹配得分（0-100）
         /// 分数越高表示匹配越精确，阈值0.6对应约60分
@@ -96,6 +101,12 @@ namespace Core.Models
         /// 用于重置触发状态，准备检测下一个芯片
         /// </summary>
         public bool IsFallingEdge { get; set; }
+
+        /// <summary>
+        /// 当前使用的模板名称（产品型号）。
+        /// 由 VisionWindowViewModel 在发布事件前设置，用于数据入库时记录 ProductModel。
+        /// </summary>
+        public string TemplateName { get; set; } = string.Empty;
 
         /// <summary>
         /// 是否应该触发分拣动作

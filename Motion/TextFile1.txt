@@ -1,0 +1,19 @@
+﻿motionControl 启动  ISensorService _sensorService;
+                    ISolenoidValueService _solenoidValueService;
+                    IPollTaskFactory _pollTaskFactory;
+
+                    电机使能 创建PollTask 读取传感器状态
+
+                    电磁阀 根据检测结果 根据传感器记录位置触发剔除
+
+
+
+
+
+
+
+
+
+
+
+vision  开启检测 发布检测结果

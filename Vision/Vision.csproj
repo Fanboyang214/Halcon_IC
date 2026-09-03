@@ -10,7 +10,29 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ViewModels\DetectionModuleViewModel.cs" />
+    <Compile Remove="ViewModels\Dialog\FileLIstDialogViewModel.cs" />
+    <Compile Remove="ViewModels\MotionControlViewModel.cs" />
+    <Compile Remove="ViewModels\TemplatePanelViewModel.cs" />
+    <Compile Remove="Views\DetectionModuleView.xaml.cs" />
+    <Compile Remove="Views\Dialog\FileListDialogView.xaml.cs" />
+    <Compile Remove="Views\MotionControlView.xaml.cs" />
+    <Compile Remove="Views\TemplatePanelView.xaml.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Remove="Views\DetectionModuleView.xaml" />
+    <Page Remove="Views\Dialog\FileBrowserDialogView.xaml" />
+    <Page Remove="Views\Dialog\FileListDialogView.xaml" />
+    <Page Remove="Views\MotionControlView.xaml" />
+    <Page Remove="Views\TemplatePanelView.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.5" />
+    <PackageReference Include="MaterialDesignThemes" Version="4.0.0" />
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+    <PackageReference Include="Prism.Unity" Version="8.1.97" />
     <PackageReference Include="Prism.Wpf" Version="8.1.97" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
   </ItemGroup>

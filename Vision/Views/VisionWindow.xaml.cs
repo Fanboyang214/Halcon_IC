@@ -1,123 +1,239 @@
+using Core.Models;
 using HalconDotNet;
 using System;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
 using Vision.ViewModels;
 
 namespace Vision.Views
 {
-    /// <summary>
-    /// 使用 HALCON HDrawingObject 进行交互式 ROI 绘制。
-    /// 取代手动鼠标事件处理，由 ViewModel.DrawRoiCmd 触发。
-    /// </summary>
     public partial class VisionWindow : System.Windows.Controls.UserControl
     {
         private HDrawingObject? _roiDrawingObject;
         private HDrawingObject.HDrawingObjectCallback? _roiCallback;
         private bool _isRoiAttached;
 
+        // 当前正在交互绘制的 ROI 类型。
+        // 用 HDrawingObject（非阻塞）取代 DrawRectangle1/DrawRectangle2（阻塞式交互算子），
+        // 避免其内部消息循环与 WPF Dispatcher 争用导致项目卡死。
+        private enum RoiMode { None, Template, CheckXld1, CheckXld2 }
+        private RoiMode _roiMode = RoiMode.None;
+
         public VisionWindow()
         {
             InitializeComponent();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+            // 用键盘确认/取消交互绘制（Enter=确认，Esc=取消）
+            PreviewKeyDown += OnPreviewKeyDown;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             if (DataContext is VisionWindowViewModel vm)
             {
-                vm.HalconWindow = HalconWindow.HalconWindow;
-                vm.RequestDrawRoi += OnRequestDrawRoi;
-                vm.RequestClearRoi += OnRequestClearRoi;
+                vm.ImageGrabbed += OnImageGrabbed;
+                //vm.DetectionResultUpdated += OnDetectionResultUpdated;
+                vm.RequestTemplateCreate += OnRequestTemplateCreate;
+                vm.RequestCheckXld1Create += OnRequestCheckXld1Create;
+                vm.RequestCheckXld2Create += OnRequestCheckXld2Create;
             }
         }
 
-        /// <summary>
-        /// ViewModel 触发：创建并附加一个 Rectangle1 HDrawingObject 到 Halcon 窗口。
-        /// </summary>
-        private void OnRequestDrawRoi()
-        {
-            if (DataContext is not VisionWindowViewModel vm) return;
+        #region 非阻塞 ROI 绘制（HDrawingObject）
 
+        private void OnRequestTemplateCreate()
+        {
+            if (HalconWindow.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized())
+            {
+                MessageBox.Show("Halcon窗口未初始化");
+                return;
+            }
+            StartRoiDrawing(RoiMode.Template);
+        }
+
+        private void OnRequestCheckXld1Create()
+        {
+            if (HalconWindow.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized())
+            {
+                MessageBox.Show("Halcon窗口未初始化");
+                return;
+            }
+            StartRoiDrawing(RoiMode.CheckXld1);
+        }
+
+        private void OnRequestCheckXld2Create()
+        {
+            if (HalconWindow.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized())
+            {
+                MessageBox.Show("Halcon窗口未初始化");
+                return;
+            }
+            StartRoiDrawing(RoiMode.CheckXld2);
+        }
+
+        /// <summary>
+        /// 创建并附加一个 HDrawingObject 到 Halcon 窗口，等待用户拖动/缩放。
+        /// 不阻塞 UI 线程；用户按 Enter 确认、Esc 取消。
+        /// </summary>
+        private void StartRoiDrawing(RoiMode mode)
+        {
             DetachExistingRoi();
+            _roiMode = mode;
 
             try
             {
-                // 默认矩形（中心位置），用户可拖动调整
                 var window = HalconWindow.HalconWindow;
-                window.GetPart(out HTuple row1, out HTuple col1, out HTuple row2, out HTuple col2);
 
+                // 默认矩形：优先按当前显示范围，其次用固定占位
+                window.GetPart(out HTuple partRow1, out HTuple partCol1, out HTuple partRow2, out HTuple partCol2);
                 double r1, c1, r2, c2;
-                if (row1.D == 0 && col1.D == 0 && row2.D == -1 && col2.D == -1)
+                if (partRow1.D == 0 && partCol1.D == 0 && partRow2.D == -1 && partCol2.D == -1)
                 {
-                    // 没有设置过 SetPart，使用图像尺寸估算
-                    if (vm.TryGetLastFrame(out var frame) && frame != null)
-                    {
-                        HOperatorSet.GetImageSize(frame, out HTuple w, out HTuple h);
-                        r1 = h / 4.0; c1 = w / 4.0;
-                        r2 = h * 3.0 / 4.0; c2 = w * 3.0 / 4.0;
-                    }
-                    else
-                    {
-                        r1 = 50; c1 = 50; r2 = 250; c2 = 350;
-                    }
+                    r1 = 50; c1 = 50; r2 = 250; c2 = 350;
                 }
                 else
                 {
-                    r1 = row1 + (row2 - row1) / 4.0;
-                    c1 = col1 + (col2 - col1) / 4.0;
-                    r2 = row1 + (row2 - row1) * 3.0 / 4.0;
-                    c2 = col1 + (col2 - col1) * 3.0 / 4.0;
+                    r1 = partRow1.D; c1 = partCol1.D;
+                    r2 = partRow2.D; c2 = partCol2.D;
                 }
 
-                _roiDrawingObject = new HDrawingObject(r1, c1, r2, c2);
+                if (mode == RoiMode.Template)
+                {
+                    double centerRow = (r1 + r2) / 2.0;
+                    double centerCol = (c1 + c2) / 2.0;
+                    double width = (r2 - r1) * 0.5;
+                    double height = (c2 - c1) * 0.5;
+
+                    double newR1 = centerRow - width / 2.0;
+                    double newC1 = centerCol - height / 2.0;
+                    double newR2 = centerRow + width / 2.0;
+                    double newC2 = centerCol + height / 2.0;
+
+                    _roiDrawingObject = new HDrawingObject(newR1, newC1, newR2, newC2);
+                }
+                else
+                {
+                    double cr = (r1 + r2) / 2.0;
+                    double cc = (c1 + c2) / 2.0;
+                    double len1 = Math.Max(1.0, Math.Abs(r2 - r1) / 2.0);
+                    double len2 = Math.Max(1.0, Math.Abs(c2 - c1) / 2.0);
+                    _roiDrawingObject = new HDrawingObject(cr, cc, 0.0, len1, len2);
+                }
+
                 _roiCallback = new HDrawingObject.HDrawingObjectCallback(OnRoiChanged);
                 _roiDrawingObject.OnResize(_roiCallback);
                 _roiDrawingObject.OnDrag(_roiCallback);
 
-                HOperatorSet.AttachDrawingObjectToWindow(HalconWindow.HalconWindow, _roiDrawingObject);
+                HOperatorSet.AttachDrawingObjectToWindow(window, _roiDrawingObject);
                 _isRoiAttached = true;
 
-                vm.SetRoiDrawing(true);
+                HalconWindow.Focus();
+                HalconWindow.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
 
-                // 立即通知一次当前 ROI
-                NotifyRoiChanged();
+                UpdateStatusHint();
             }
             catch (Exception ex)
             {
-                vm.StatusText = $"创建 ROI 绘图对象失败: {ex.Message}";
+                MessageBox.Show($"创建绘图对象失败：{ex.Message}");
+                _roiMode = RoiMode.None;
             }
+        }
+
+        private void UpdateStatusHint()
+        {
+            string hint = _roiMode switch
+            {
+                RoiMode.Template => "请在图像窗口调整模板矩形区域，按 Enter 确认，Esc 取消",
+                RoiMode.CheckXld1 => "请在图像窗口调整检测区域一，按 Enter 确认，Esc 取消",
+                RoiMode.CheckXld2 => "请在图像窗口调整检测区域二，按 Enter 确认，Esc 取消",
+                _ => ""
+            };
+            if (DataContext is VisionWindowViewModel vm) vm.StatusText = hint;
         }
 
         private void OnRoiChanged(IntPtr drawid, IntPtr windowHandle, string type)
         {
-            NotifyRoiChanged();
+            // 拖动/缩放过程中无需实时处理；按 Enter 时统一确认
         }
 
-        /// <summary>
-        /// ViewModel 触发：清除 ROI 绘图对象（保存/创建模板成功后调用）。
-        /// </summary>
-        private void OnRequestClearRoi()
+        private void OnPreviewKeyDown(object sender, KeyEventArgs e)
         {
-            DetachExistingRoi();
+            if (_roiMode == RoiMode.None) return;
+
+            if (e.Key == Key.Enter || e.Key == Key.Return)
+            {
+                ConfirmRoi();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                CancelRoi();
+                e.Handled = true;
+            }
         }
 
-        private void NotifyRoiChanged()
+        private void ConfirmRoi()
         {
-            if (_roiDrawingObject == null) return;
-            if (DataContext is not VisionWindowViewModel vm) return;
+            if (_roiDrawingObject == null)
+            {
+                _roiMode = RoiMode.None;
+                return;
+            }
+
+            var mode = _roiMode;
+            _roiMode = RoiMode.None;
 
             try
             {
-                double row1 = _roiDrawingObject.GetDrawingObjectParams("row1");
-                double col1 = _roiDrawingObject.GetDrawingObjectParams("column1");
-                double row2 = _roiDrawingObject.GetDrawingObjectParams("row2");
-                double col2 = _roiDrawingObject.GetDrawingObjectParams("column2");
+                if (DataContext is not VisionWindowViewModel vm) return;
 
-                vm.SetRoi(row1, col1, row2, col2);
+                if (mode == RoiMode.Template)
+                {
+                    double r1 = ParamD("row1");
+                    double c1 = ParamD("column1");
+                    double r2 = ParamD("row2");
+                    double c2 = ParamD("column2");
+                    DetachExistingRoi();
+                    vm.SetTemplateRegion(r1, c1, r2, c2);
+                }
+                else if (mode == RoiMode.CheckXld1)
+                {
+                    double row = ParamD("row");
+                    double col = ParamD("column");
+                    double phi = ParamD("phi");
+                    double len1 = ParamD("length1");
+                    double len2 = ParamD("length2");
+                    DetachExistingRoi();
+                    _ = vm.SetCheckXld1(row, col, len1, len2, phi);
+                }
+                else if (mode == RoiMode.CheckXld2)
+                {
+                    double row = ParamD("row");
+                    double col = ParamD("column");
+                    double phi = ParamD("phi");
+                    double len1 = ParamD("length1");
+                    double len2 = ParamD("length2");
+                    DetachExistingRoi();
+                    _ = vm.SetCheckXld2(row, col, len1, len2, phi);
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"确认绘制失败：{ex.Message}");
+                DetachExistingRoi();
+            }
         }
+
+        private void CancelRoi()
+        {
+            _roiMode = RoiMode.None;
+            DetachExistingRoi();
+        }
+
+        private double ParamD(string param) => _roiDrawingObject!.GetDrawingObjectParams(param).D;
 
         private void DetachExistingRoi()
         {
@@ -125,8 +241,7 @@ namespace Vision.Views
             {
                 try
                 {
-                    HOperatorSet.DetachDrawingObjectFromWindow(
-                        HalconWindow.HalconWindow, _roiDrawingObject);
+                    HOperatorSet.DetachDrawingObjectFromWindow(HalconWindow.HalconWindow, _roiDrawingObject);
                 }
                 catch { }
                 _isRoiAttached = false;
@@ -140,14 +255,119 @@ namespace Vision.Views
             _roiCallback = null;
         }
 
+        #endregion
+
+        #region 图像显示（Halcon 窗口绘制）
+
+        /// <summary>
+        /// ViewModel 采集图像就绪回调：显示实时采集图像。
+        /// </summary>
+        private void OnImageGrabbed(HObject image)
+        {
+            DisplayImage(image);
+        }
+
+        ///// <summary>
+        ///// ViewModel 检测结果更新回调：在 Halcon 窗口绘制检测结果图像。
+        ///// </summary>
+        //private void OnDetectionResultUpdated(DetectionResult result)
+        //{
+        //    // 显示模板轮廓（绿色）
+        //    if (result.ModelContours != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.ModelContours, "green");
+        //        }
+        //        finally
+        //        {
+        //            result.ModelContours.Dispose();
+        //        }
+        //    }
+
+        //    // 显示检测区域一（合格=青色，不合格=红色）
+        //    if (result.DetectionRegion1 != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
+        //        }
+        //        finally
+        //        {
+        //            result.DetectionRegion1.Dispose();
+        //        }
+        //    }
+
+        //    // 显示检测区域二（合格=青色，不合格=红色）
+        //    if (result.DetectionRegion2 != null)
+        //    {
+        //        try
+        //        {
+        //            DisplayOverlay(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
+        //        }
+        //        finally
+        //        {
+        //            result.DetectionRegion2.Dispose();
+        //        }
+        //    }
+        //}
+
+        /// <summary>
+        /// 在 Halcon 窗口显示图像（满窗口适配）。
+        /// </summary>
+        private void DisplayImage(HObject image)
+        {
+            if (image == null || !image.IsInitialized()) return;
+            if (HalconWindow?.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
+
+            try
+            {
+                HalconWindow.HalconWindow.SetPart(0, 0, -1, -1);
+                HalconWindow.HalconWindow.DispObj(image);
+                HalconWindow.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"显示图像失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 在 Halcon 窗口叠加显示对象（region / xld 等），使用指定颜色。
+        /// </summary>
+        private void DisplayOverlay(HObject obj, string color)
+        {
+            if (obj == null || !obj.IsInitialized()) return;
+            if (HalconWindow?.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
+
+            try
+            {
+                HalconWindow.HalconWindow.SetColor(color);
+                HalconWindow.HalconWindow.DispObj(obj);
+                HalconWindow.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"显示叠加对象失败: {ex.Message}");
+            }
+        }
+
+        #endregion
+
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-            DetachExistingRoi();
+            CancelRoi();
+            PreviewKeyDown -= OnPreviewKeyDown;
 
             if (DataContext is VisionWindowViewModel vm)
             {
-                vm.RequestDrawRoi -= OnRequestDrawRoi;
-                vm.RequestClearRoi -= OnRequestClearRoi;
+                vm.ImageGrabbed -= OnImageGrabbed;
+                //vm.DetectionResultUpdated -= OnDetectionResultUpdated;
+                vm.RequestTemplateCreate -= OnRequestTemplateCreate;
+                vm.RequestCheckXld1Create -= OnRequestCheckXld1Create;
+                vm.RequestCheckXld2Create -= OnRequestCheckXld2Create;
             }
         }
     }

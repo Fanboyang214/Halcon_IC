@@ -23,7 +23,7 @@
         <SolidColorBrush x:Key="FooterBg" Color="#FFE8ECF1"/>
         <SolidColorBrush x:Key="TitleBg" Color="#FF2C5282"/>
         <SolidColorBrush x:Key="SubTitleBg" Color="#FF3A6CB5"/>
-        <conv:BoolToColorConverter x:Key="BoolToColorConverter"/>
+        <conv:IntToColorConverter x:Key="IntToColorConverter"/>
     </Window.Resources>
 
     <Grid Background="{StaticResource PanelBg}">
@@ -89,11 +89,11 @@
                                     <TextBlock Text="运动控制" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="MotionControlRegion" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
+                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="MotionControl" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"
+                                            MinHeight="200"  />
                         </Grid>
                     </Border>
-
-                    <!-- 模板模块 -->
+                    <!-- 系统日志 -->
                     <Border Grid.Row="1" Margin="6,3,6,3">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -102,15 +102,15 @@
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="{StaticResource SubTitleBg}" CornerRadius="3,3,0,0" Padding="8,3">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🖼" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="模板模块" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="📋" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBlock Text="系统日志" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="TemplatePanelRegion" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
+                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="SystemLogRegion" Height="200" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
                         </Grid>
                     </Border>
 
-                    <!-- 检测模块 -->
+                    <!-- 设备状态监测 -->
                     <Border Grid.Row="2" Margin="6,3,6,6">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -119,13 +119,18 @@
                             </Grid.RowDefinitions>
                             <Border Grid.Row="0" Background="{StaticResource SubTitleBg}" CornerRadius="3,3,0,0" Padding="8,3">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🔍" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="检测模块" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="🖥" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBlock Text="设备状态监测" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="DetectionModuleRegion" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
+                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="DeviceStatusRegion" Height="200" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
                         </Grid>
                     </Border>
+                    <!-- 模板模块 -->
+                    
+
+                    <!-- 检测模块 -->
+                   
                 </Grid>
             </Border>
 
@@ -161,26 +166,11 @@
                                     <TextBlock Text="检测数据趋势" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="StatisticRegion" Height="230" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
+                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="StatisticRegion" Height="430" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
                         </Grid>
                     </Border>
 
-                    <!-- 系统日志 -->
-                    <Border Grid.Row="1" Margin="6,3,6,3">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="{StaticResource SubTitleBg}" CornerRadius="3,3,0,0" Padding="8,3">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📋" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="系统日志" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="SystemLogRegion" Height="200" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
-                        </Grid>
-                    </Border>
+                   
 
                     <!-- 实时检测记录 -->
                     <Border Grid.Row="2" Margin="6,3,6,3">
@@ -199,22 +189,7 @@
                         </Grid>
                     </Border>
 
-                    <!-- 设备状态监测 -->
-                    <Border Grid.Row="3" Margin="6,3,6,6">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="{StaticResource SubTitleBg}" CornerRadius="3,3,0,0" Padding="8,3">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="🖥" Foreground="{StaticResource Accent}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                    <TextBlock Text="设备状态监测" Foreground="{StaticResource HeaderText}" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <ContentControl Grid.Row="1" prism:RegionManager.RegionName="DeviceStatusRegion" Height="160" Background="{StaticResource CardBg}" BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"/>
-                        </Grid>
-                    </Border>
+                    
                 </Grid>
             </Border>
         </Grid>

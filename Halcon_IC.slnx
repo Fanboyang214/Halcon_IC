@@ -21,9 +21,7 @@
   <Project Path="Login/Login.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
-  <Project Path="Motion/Motion.csproj">
-    <Platform Solution="*|x64" Project="x64" />
-  </Project>
+  <Project Path="Motion/Motion.csproj" Id="3750581b-dc70-4c19-b305-3c9ee76f132e" />
   <Project Path="Report/Report.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>

@@ -1,0 +1,46 @@
+﻿<UserControl x:Class="Motion.Views.MotionControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Motion.Views"
+             mc:Ignorable="d" 
+             d:DesignHeight="200" d:DesignWidth="240"
+             Background="White"
+             >
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+
+        <Button  Content="连接运动控制卡" Command="{Binding ConnectCommand}" Background="#FF06650F" FontSize="6" Foreground="White"  Margin="10"/>
+        <Button Grid.Column="1" Grid.Row="0"  Content="电机使能" Command="{Binding SevonCommand}" Background="#FF06650F" FontSize="6" Foreground="White"  Margin="10"/>
+        <Button Grid.Column="0" Grid.Row="1"  Content="启动传送带" Command="{Binding VmoveCommand}" Background="#FF06650F" FontSize="6" Foreground="White"  Margin="10"/>
+        <Button Grid.Column="1" Grid.Row="1"  Content="关闭传送带" Command="{Binding VstopCommand}" Background="#FFC23120" FontSize="6" Foreground="White"  Margin="10"/>
+        <Border Grid.Row="2" Grid.ColumnSpan="2">
+            <Grid>
+                <Grid.ColumnDefinitions >
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel  Orientation="Vertical">
+                    <TextBlock Grid.Column="0" VerticalAlignment="Center" TextAlignment="Center"  FontSize="15">传送带速度</TextBlock>
+                    <Separator/>
+                    <TextBox Width="100" Height="20" BorderBrush="Black" Text="{Binding Speed}" Margin="0,2" FontSize="8" Background="LightBlue"/>
+                </StackPanel>
+                
+                <Button Grid.Column="1"  Content="执行调速（重启传送带生效）" Command="{Binding ChangeSpeedCommand}" Background="#FF202AC2" FontSize="6" Foreground="White"  Margin="10" Padding="0"/>
+            </Grid>
+            
+        </Border>
+        
+
+    </Grid>
+</UserControl>

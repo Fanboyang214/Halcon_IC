@@ -5,15 +5,18 @@ using System.Windows.Media;
 
 namespace ICApp.Converters
 {
-    public class BoolToColorConverter : IValueConverter
+    public class IntToColorConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is bool b)
+            if (value is int b)
             {
-                return b
-                    ? new SolidColorBrush(Color.FromRgb(0x43, 0xA0, 0x47))  // green
-                    : new SolidColorBrush(Color.FromRgb(0xBD, 0xBD, 0xBD));  // gray
+                return b switch
+                {
+                    0 => Brushes.Green,
+                    1 => Brushes.DarkGray,
+                    _ => Brushes.Yellow
+                };
             }
             return Brushes.Gray;
         }

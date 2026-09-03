@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MaterialDesignThemes" Version="4.0.0" />
     <PackageReference Include="NLog" Version="6.1.4" />
     <PackageReference Include="Prism.Unity" Version="8.1.97" />
   </ItemGroup>
@@ -25,6 +26,7 @@
     <ProjectReference Include="..\Core\Core.csproj" />
     <ProjectReference Include="..\Data\Data.csproj" />
     <ProjectReference Include="..\Infrastruce\Infrastruce.csproj" />
+    <ProjectReference Include="..\Motion\Motion.csproj" />
     <ProjectReference Include="..\Vision\Vision.csproj" />
   </ItemGroup>
 

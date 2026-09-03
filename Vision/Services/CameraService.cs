@@ -95,14 +95,19 @@ namespace Vision.Services
         {
             lock (_grabLock)
             {
-                if (!IsOpen) throw new InvalidOperationException("相机未打开，无法开始采集。");
-                if (_isGrabbing) throw new InvalidOperationException("已在采集中。");
+                if (!IsOpen)
+                    throw new InvalidOperationException("相机未打开，无法开始采集。请先调用 Open()。");
+
+                if (_isGrabbing)
+                    throw new InvalidOperationException("相机已在采集中，请先停止当前采集。");
+
+                if (_acqHandle == null)
+                    throw new InvalidOperationException("采集句柄无效，相机可能已被释放。");
 
                 _cts = new CancellationTokenSource();
                 _frameIndex = 0;
                 _isGrabbing = true;
 
-                // 后台采集线程：循环 GrabImage → Clone → 发布。
                 _grabTask = Task.Run(() => GrabLoop(_cts.Token));
             }
         }
