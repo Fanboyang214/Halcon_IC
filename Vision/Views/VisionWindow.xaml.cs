@@ -1,3 +1,4 @@
+using Core.Models;
 using HalconDotNet;
 using System;
 using System.Windows;
@@ -32,10 +33,8 @@ namespace Vision.Views
         {
             if (DataContext is VisionWindowViewModel vm)
             {
-                vm.HalconWindow = HalconWindow.HalconWindow;
-
-                vm.ImageReady += OnImageReady;
-                vm.ImageReadyColor += OnImageReadyColor;
+                vm.ImageGrabbed += OnImageGrabbed;
+                vm.DetectionResultUpdated += OnDetectionResultUpdated;
                 vm.RequestTemplateCreate += OnRequestTemplateCreate;
                 vm.RequestCheckXld1Create += OnRequestCheckXld1Create;
                 vm.RequestCheckXld2Create += OnRequestCheckXld2Create;
@@ -104,22 +103,18 @@ namespace Vision.Views
                 {
                     double centerRow = (r1 + r2) / 2.0;
                     double centerCol = (c1 + c2) / 2.0;
-                    double width = (r2 - r1) * 0.5;   // 取显示范围 50% 宽度
-                    double height = (c2 - c1) * 0.5;  // 取显示范围 50% 高度
+                    double width = (r2 - r1) * 0.5;
+                    double height = (c2 - c1) * 0.5;
 
-                    // 生成居中缩小的矩形
                     double newR1 = centerRow - width / 2.0;
                     double newC1 = centerCol - height / 2.0;
                     double newR2 = centerRow + width / 2.0;
                     double newC2 = centerCol + height / 2.0;
 
                     _roiDrawingObject = new HDrawingObject(newR1, newC1, newR2, newC2);
-                    // Rectangle1 交互对象
-                    //_roiDrawingObject = new HDrawingObject(r1, c1, r2, c2);
                 }
                 else
                 {
-                    // 检测区域用旋转矩形 Rectangle2，默认水平、尺寸取范围的一半
                     double cr = (r1 + r2) / 2.0;
                     double cc = (c1 + c2) / 2.0;
                     double len1 = Math.Max(1.0, Math.Abs(r2 - r1) / 2.0);
@@ -262,13 +257,102 @@ namespace Vision.Views
 
         #endregion
 
-        private void OnImageReadyColor(HObject obj, string color)
-        {
-            if (DataContext is not VisionWindowViewModel) return;
-            // obj 可能是 image / region / xld，统一为 HObject，不能用 'is HImage' 检查
-            if (obj == null || !obj.IsInitialized()) return;
+        #region 图像显示（Halcon 窗口绘制）
 
-            if (HalconWindow == null || HalconWindow.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
+        /// <summary>
+        /// ViewModel 采集图像就绪回调：显示实时采集图像。
+        /// </summary>
+        private void OnImageGrabbed(HObject image)
+        {
+            DisplayImage(image);
+        }
+
+        /// <summary>
+        /// ViewModel 检测结果更新回调：在 Halcon 窗口绘制检测结果图像。
+        /// </summary>
+        private void OnDetectionResultUpdated(DetectionResult result)
+        {
+            // 显示检测结果叠加图
+            if (result.DisplayImage != null)
+            {
+                try
+                {
+                    DisplayImage(result.DisplayImage);
+                }
+                finally
+                {
+                    result.DisplayImage.Dispose();
+                }
+            }
+
+            // 显示模板轮廓（绿色）
+            if (result.ModelContours != null)
+            {
+                try
+                {
+                    DisplayOverlay(result.ModelContours, "green");
+                }
+                finally
+                {
+                    result.ModelContours.Dispose();
+                }
+            }
+
+            // 显示检测区域一（合格=青色，不合格=红色）
+            if (result.DetectionRegion1 != null)
+            {
+                try
+                {
+                    DisplayOverlay(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
+                }
+                finally
+                {
+                    result.DetectionRegion1.Dispose();
+                }
+            }
+
+            // 显示检测区域二（合格=青色，不合格=红色）
+            if (result.DetectionRegion2 != null)
+            {
+                try
+                {
+                    DisplayOverlay(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
+                }
+                finally
+                {
+                    result.DetectionRegion2.Dispose();
+                }
+            }
+        }
+
+        /// <summary>
+        /// 在 Halcon 窗口显示图像（满窗口适配）。
+        /// </summary>
+        private void DisplayImage(HObject image)
+        {
+            if (image == null || !image.IsInitialized()) return;
+            if (HalconWindow?.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
+
+            try
+            {
+                HalconWindow.HalconWindow.SetPart(0, 0, -1, -1);
+                HalconWindow.HalconWindow.DispObj(image);
+                HalconWindow.UpdateLayout();
+                Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"显示图像失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 在 Halcon 窗口叠加显示对象（region / xld 等），使用指定颜色。
+        /// </summary>
+        private void DisplayOverlay(HObject obj, string color)
+        {
+            if (obj == null || !obj.IsInitialized()) return;
+            if (HalconWindow?.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
 
             try
             {
@@ -279,30 +363,11 @@ namespace Vision.Views
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"显示图像失败: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"显示叠加对象失败: {ex.Message}");
             }
         }
 
-        private void OnImageReady(HObject @object)
-        {
-            if (DataContext is not VisionWindowViewModel) return;
-            // GrabImage 返回的是 HObject（不是 HImage 派生类型），不能用 'is HImage' 检查，否则会被直接拦截
-            if (@object == null || !@object.IsInitialized()) return;
-
-            if (HalconWindow == null || HalconWindow.HalconWindow == null || !HalconWindow.HalconWindow.IsInitialized()) return;
-
-            try
-            {
-                HalconWindow.HalconWindow.SetPart(0, 0, -1, -1);
-                HalconWindow.HalconWindow.DispObj(@object);
-                HalconWindow.UpdateLayout();
-                Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"显示图像失败: {ex.Message}");
-            }
-        }
+        #endregion
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
@@ -311,8 +376,8 @@ namespace Vision.Views
 
             if (DataContext is VisionWindowViewModel vm)
             {
-                vm.ImageReady -= OnImageReady;
-                vm.ImageReadyColor -= OnImageReadyColor;
+                vm.ImageGrabbed -= OnImageGrabbed;
+                vm.DetectionResultUpdated -= OnDetectionResultUpdated;
                 vm.RequestTemplateCreate -= OnRequestTemplateCreate;
                 vm.RequestCheckXld1Create -= OnRequestCheckXld1Create;
                 vm.RequestCheckXld2Create -= OnRequestCheckXld2Create;

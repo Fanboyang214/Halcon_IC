@@ -3,6 +3,7 @@ using Core.Models;
 using HalconDotNet;
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -32,6 +33,10 @@ namespace Vision.Services
 
         // 消费者线程退出等待超时
         private const int ConsumerExitWaitMs = 3000;
+
+        // 状态机：上次上升沿检测时间戳（Stopwatch Tick，用于高精度超时判断）
+        private long _lastDetectionTimestamp;
+        private readonly object _stateLock = new();
 
         private readonly ILogService _logger;
 
@@ -205,6 +210,38 @@ namespace Vision.Services
                 double matchCol = column[0].D;
                 result.MatchScore = (int)(matchScore * 100);
 
+                // 状态机判断：是否为新芯片（上升沿）
+                bool isRisingEdge = false;
+                long now = Stopwatch.GetTimestamp();
+                lock (_stateLock)
+                {
+                    if (_lastDetectionTimestamp == 0 ||
+                        (now - _lastDetectionTimestamp) * 1000 / Stopwatch.Frequency >= config.FallingEdgeTimeoutMs)
+                    {
+                        isRisingEdge = true;
+                        _lastDetectionTimestamp = now;
+                    }
+                }
+
+                if (!isRisingEdge)
+                {
+                    // 高电平期间：同一产品后续帧不重复检测，直接返回不触发
+                    result.ResultText = "Ignored";
+                    result.ShouldTrigger = false;
+                    result.IsRisingEdge = false;
+                    result.IsOK = false;
+                    result.PinCount = 0;
+                    result.PinCount2 = 0;
+                    // 仍生成显示图
+                    displayImage = frame.CopyObj(1, -1);
+                    result.DisplayImage = displayImage;
+                    displayImage = null;
+                    return result;
+                }
+
+                // 第一次匹配到新芯片，继续处理
+                result.IsRisingEdge = true;
+
                 // 2. 生成模板轮廓在匹配位姿下的副本（用于显示）
                 //    vector_angle_to_rigid 计算旋转平移矩阵
                 HOperatorSet.VectorAngleToRigid(0, 0, 0, matchRow, matchCol, matchAngle, out HTuple homMat2d);
@@ -253,7 +290,6 @@ namespace Vision.Services
                 result.IsOK = ok1 && ok2;
                 result.ResultText = result.IsOK ? "OK" : "NG";
                 result.ShouldTrigger = true;
-                result.IsRisingEdge = true;
 
                 // 8. 生成显示图（原图 + 匹配轮廓 + 检测区域叠加）
                 displayImage = frame.CopyObj(1, -1);

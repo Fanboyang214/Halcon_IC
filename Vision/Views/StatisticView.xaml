@@ -25,16 +25,7 @@
             <TextBlock Text="| 实时:" VerticalAlignment="Center" Margin="16,0,4,0"/>
             <TextBlock Text="{Binding TotalCount, StringFormat=总数:{0}}" VerticalAlignment="Center" Margin="4,0"/>
             <TextBlock Text="{Binding OkCount, StringFormat=合格:{0}}" VerticalAlignment="Center" Margin="4,0"/>
-            <TextBlock Text="{Binding NgCount, StringFormat=不合格:{0}}" VerticalAlignment="Center" Margin="4,0" RenderTransformOrigin="0.5,0.5">
-                <TextBlock.RenderTransform>
-                    <TransformGroup>
-                        <ScaleTransform/>
-                        <SkewTransform/>
-                        <RotateTransform Angle="-5.141"/>
-                        <TranslateTransform/>
-                    </TransformGroup>
-                </TextBlock.RenderTransform>
-            </TextBlock>
+            <TextBlock Text="{Binding NgCount, StringFormat=不合格:{0}}" VerticalAlignment="Center" Margin="4,0"/>
             <TextBlock Text="{Binding Yield, StringFormat=良率:{0:F1}%}" VerticalAlignment="Center" Margin="4,0" FontWeight="Bold"/>
         </StackPanel>
 

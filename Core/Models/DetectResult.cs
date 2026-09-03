@@ -103,6 +103,12 @@ namespace Core.Models
         public bool IsFallingEdge { get; set; }
 
         /// <summary>
+        /// 当前使用的模板名称（产品型号）。
+        /// 由 VisionWindowViewModel 在发布事件前设置，用于数据入库时记录 ProductModel。
+        /// </summary>
+        public string TemplateName { get; set; } = string.Empty;
+
+        /// <summary>
         /// 是否应该触发分拣动作
         /// 当检测到芯片（上升沿）且检测结果有效时为true
         /// ViewModel根据此标志和IsOK决定是否触发电磁阀剔除不合格品

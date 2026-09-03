@@ -36,6 +36,7 @@ namespace Motion
         {
             containerRegistry.RegisterSingleton<IMotionControlService, MotionControlService>();
             containerRegistry.RegisterSingleton<ISensorService, SensorService>();
+            containerRegistry.RegisterSingleton<ISolenoidValueService, SolenoidValueService>();
             containerRegistry.RegisterSingleton<ILogService, LogService>();
             containerRegistry.RegisterForNavigation<MotionControlView, MotionControlViewModel>();
         }

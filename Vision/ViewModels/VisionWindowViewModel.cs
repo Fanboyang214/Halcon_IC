@@ -60,18 +60,9 @@ namespace Vision.ViewModels
 
         // 订阅令牌
         private Prism.Events.SubscriptionToken? _grabSubToken;
-        private Prism.Events.SubscriptionToken? _sensorToken;
-
-        // 传感器触发状态（由 Motion 模块通过 SensorTriggeredEvent 设置）
-        private volatile bool _sensorTriggered;
 
         private VisionStatus _visionStatus;
 
-
-        /// <summary>
-        /// Halcon 窗口引用（由 VisionWindow.xaml.cs 在 Loaded 时注入）。
-        /// </summary>
-        public HWindow? HalconWindow { get; set; }
 
         #region 绑定属性
 
@@ -180,6 +171,16 @@ namespace Vision.ViewModels
         public DelegateCommand StopDetectCmd { get; }
 
         /// <summary>
+        /// 检测结果图像更新事件（由 View 订阅，处理 Halcon 窗口绘制）。
+        /// </summary>
+        public event Action<DetectionResult>? DetectionResultUpdated;
+
+        /// <summary>
+        /// 采集图像就绪事件（由 View 订阅，显示实时图像）。
+        /// </summary>
+        public event Action<HObject>? ImageGrabbed;
+
+        /// <summary>
         /// 触发 ROI 绘制（由 View 订阅，使用 HDrawingObject 创建交互绘图对象）。
         /// </summary>
         public event Action? RequestDrawRoi;
@@ -190,12 +191,18 @@ namespace Vision.ViewModels
         public event Action? RequestClearRoi;
         
         /// <summary>
-        /// 显示采集图像（由View订阅）
+        /// 触发模板区域绘制（由 View 订阅）。
         /// </summary>
-        public event Action<HObject>? ImageReady;
-        public event Action<HObject,string>? ImageReadyColor;
         public event Action? RequestTemplateCreate;
+        
+        /// <summary>
+        /// 触发检测区域一绘制（由 View 订阅）。
+        /// </summary>
         public event Action? RequestCheckXld1Create;
+        
+        /// <summary>
+        /// 触发检测区域二绘制（由 View 订阅）。
+        /// </summary>
         public event Action? RequestCheckXld2Create;
         #endregion
 
@@ -230,10 +237,6 @@ namespace Vision.ViewModels
             LoadReferenceImageCmd = new DelegateCommand(ExecuteLoadReferenceImage, () => !IsDetecting);
             StartDetectCmd = new DelegateCommand(async()=>await ExecuteStartDetect(), () => IsTemplateCreated && !IsDetecting);
             StopDetectCmd = new DelegateCommand(async()=> await ExecuteStopDetect(), () => IsDetecting);
-
-            // 订阅 Motion 模块发布的传感器触发事件
-            _sensorToken = _eventAggregator.GetEvent<SensorTriggeredEvent>()
-                .Subscribe(_ => _sensorTriggered = _.SensorStatue == 0 ? true : false, ThreadOption.UIThread);
         }
 
         
@@ -745,14 +748,11 @@ namespace Vision.ViewModels
             {
                 var img = new HObject();
                 HOperatorSet.ReadImage(out img, dlg.FileName);
-                //ShowImage(img);
-                ImageReady?.Invoke(img);
                 lock (_frameLock)
                 {
                     _lastFrame?.Dispose();
                     _lastFrame = img.Clone();
                 }
-                //StatusText = $"参考图已加载: {Path.GetFileName(dlg.FileName)}";
                 AddLog("INFO", $"参考图已加载: {Path.GetFileName(dlg.FileName)}");
             }
             catch (Exception ex)
@@ -853,7 +853,7 @@ namespace Vision.ViewModels
         {
             try
             {
-                ImageReady?.Invoke(payload.Image);
+                ImageGrabbed?.Invoke(payload.Image);
 
                 lock (_frameLock)
                 {
@@ -861,12 +861,9 @@ namespace Vision.ViewModels
                     _lastFrame = payload.Image.Clone();
                 }
 
-                // 仅当传感器触发且检测已开启时，才处理第一帧
-                if (IsDetecting && _sensorTriggered)
+                // 实时检测：所有帧都进入检测服务，由状态机决定是否处理（上升沿才做完整检测）
+                if (IsDetecting)
                 {
-                    _sensorTriggered = false;
-                    AddLog("INFO", "传感器触发，处理当前帧");
-
                     bool queued = _detection.EnqueueFrame(payload.Image);
                     if (!queued)
                     {
@@ -904,62 +901,17 @@ namespace Vision.ViewModels
             PinCount = result.PinCount;
             PinCount2 = result.PinCount2;
 
-            // 发布检测记录事件，供 DetectionRecordViewModel 订阅显示
-            _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
+            // 注入模板名称，供数据入库使用
+            result.TemplateName = _template.TemplateName;
 
-            if (HalconWindow == null) return;
-
-            if (result.DisplayImage != null)
+            // 仅上升沿检测结果（ShouldTrigger=true）才发布事件供 Motion 模块消费
+            if (result.ShouldTrigger)
             {
-                //HalconWindow.SetPart(0, 0, -1, -1);
-                //HalconWindow.DispObj(result.DisplayImage);
-                ImageReady?.Invoke(result.DisplayImage);
-                result.DisplayImage.Dispose();
+                _eventAggregator.GetEvent<DetectionResultEvent>().Publish(result);
             }
 
-            if (result.ModelContours != null)
-            {
-                try
-                {
-                    //HalconWindow.SetColor("green");
-                    //HalconWindow.DispObj(result.ModelContours);
-                    ImageReadyColor?.Invoke(result.ModelContours, "green");
-                }
-                finally
-                {
-                    result.ModelContours.Dispose();
-                }
-            }
-
-            if (result.DetectionRegion1 != null)
-            {
-                try
-                {
-                    //HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    //HalconWindow.DispObj(result.DetectionRegion1);
-                    ImageReadyColor?.Invoke(result.DetectionRegion1, result.IsOK ? "cyan" : "red");
-
-                }
-                finally
-                {
-                    result.DetectionRegion1.Dispose();
-                }
-            }
-
-            if (result.DetectionRegion2 != null)
-            {
-                try
-                {
-                    //HalconWindow.SetColor(result.IsOK ? "cyan" : "red");
-                    //HalconWindow.DispObj(result.DetectionRegion2);
-                    ImageReadyColor?.Invoke(result.DetectionRegion2, result.IsOK ? "cyan" : "red");
-
-                }
-                finally
-                {
-                    result.DetectionRegion2.Dispose();
-                }
-            }
+            // 通知 View 绘制检测结果图像（View 负责 Halcon 窗口绘制和 HObject 释放）
+            DetectionResultUpdated?.Invoke(result);
         }
 
         private string GetModelDirectory()

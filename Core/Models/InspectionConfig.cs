@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -35,5 +35,8 @@ namespace Core.Models
 
         /// <summary>检测区域2针脚数合格上限，默认4</summary>
         public int PinCount2Max { get; set; } = 4;
+
+        /// <summary>上升沿→下降沿自动复位超时(ms)，同一产品在此时间内不重复检测</summary>
+        public int FallingEdgeTimeoutMs { get; set; } = 2500;
     }
 }

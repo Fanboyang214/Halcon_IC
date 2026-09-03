@@ -7,6 +7,7 @@ using Prism.Mvvm;
 using Prism.Navigation;
 using Prism.Services.Dialogs;
 using System;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 namespace Motion.ViewModels
@@ -18,9 +19,19 @@ namespace Motion.ViewModels
         private readonly ILogService _logService;
         private readonly IEventAggregator _eventAggregator;
         private readonly ISensorService _sensor;
+        private readonly ISolenoidValueService _solenoid;
+        private readonly IConfigService _config;
 
         private readonly IPollTask _sensorPollTask;
-        
+
+        // 检测结果队列（Vision 模块发布 → Motion 消费）
+        private readonly ConcurrentQueue<DetectionResult> _resultQueue = new ConcurrentQueue<DetectionResult>();
+
+        // 传感器上次状态，用于上升沿检测
+        private bool _lastSensorState;
+
+        // 订阅令牌
+        private Prism.Events.SubscriptionToken _detectionResultToken;
 
         private string _speed = "3000";
         private MotionStatus _status = new MotionStatus();
@@ -45,6 +56,8 @@ namespace Motion.ViewModels
             ILogService logService,
             IEventAggregator eventAggregator,
             ISensorService sensor,
+            ISolenoidValueService solenoid,
+            IConfigService config,
             IPollTaskFactory pollTaskFactory)
         {
             _motionControlService = motionControlService ?? throw new ArgumentNullException(nameof(motionControlService));
@@ -52,6 +65,8 @@ namespace Motion.ViewModels
             _logService = logService ?? throw new ArgumentNullException(nameof(logService));
             _eventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
             _sensor = sensor ?? throw new ArgumentNullException(nameof(sensor));
+            _solenoid = solenoid ?? throw new ArgumentNullException(nameof(solenoid));
+            _config = config ?? throw new ArgumentNullException(nameof(config));
             _ = pollTaskFactory ?? throw new ArgumentNullException(nameof(pollTaskFactory));
 
             ConnectCommand = new DelegateCommand(OnConnectCommand);
@@ -60,6 +75,10 @@ namespace Motion.ViewModels
             VstopCommand = new DelegateCommand(OnVstopCommand);
             ChangeSpeedCommand = new DelegateCommand(OnChangeSpeedCommand);
 
+            // 订阅 Vision 模块发布的检测结果事件
+            _detectionResultToken = _eventAggregator.GetEvent<DetectionResultEvent>()
+                .Subscribe(OnDetectionResultReceived, ThreadOption.BackgroundThread);
+
             // 启动传感器轮询：每 50ms 检测一次产品到位信号
             _sensorPollTask = pollTaskFactory.CreatePollTask(OnSensorPollAsync, 50);
             _sensorPollTask.StartPoll();
@@ -67,7 +86,7 @@ namespace Motion.ViewModels
 
         /// <summary>
         /// 传感器轮询回调（后台线程）。
-        /// 检测到上升沿（无产品 → 有产品）时发布 SensorTriggeredEvent。
+        /// 检测到上升沿（传感器从无产品→有产品）时，出队检测结果并判断是否执行剔除。
         /// </summary>
         private async Task OnSensorPollAsync()
         {
@@ -76,20 +95,102 @@ namespace Motion.ViewModels
                 try
                 {
                     bool currentState = _sensor.ReadSensorState();
-                    double position = _sensor.ReadSensorPosition();
 
-                    
-                        _eventAggregator.GetEvent<SensorTriggeredEvent>().Publish(
-                            new SensorTriggeredPayload { TriggerTime = DateTime.Now,SensorStatue = currentState?0:1 , ConveyorPosition = position});
-                    
+                    // 上升沿检测：产品到达传感器
+                    if (currentState && !_lastSensorState)
+                    {
+                        _lastSensorState = true;
+                        ProcessSensorTrigger();
+                        _eventAggregator.GetEvent<SensorTriggeredEvent>().Publish(new SensorTriggeredPayload { SensorStatue = 0 });
+                    }
+                    else if (!currentState)
+                    {
+                        _lastSensorState = false;
+                        _eventAggregator.GetEvent<SensorTriggeredEvent>().Publish(new SensorTriggeredPayload { SensorStatue = 1 });
 
-                   
+                    }
                 }
                 catch
                 {
                     // 传感器读取失败时静默处理
                 }
             });
+        }
+
+        /// <summary>
+        /// 传感器触发处理：出队检测结果，若 ShouldTrigger && !IsOK 则执行剔除。
+        /// </summary>
+        private void ProcessSensorTrigger()
+        {
+            if (_resultQueue.TryDequeue(out var result))
+            {
+                AddLog("INFO", $"传感器触发，结果队列出队: {result.ResultText}, ShouldTrigger={result.ShouldTrigger}, IsOK={result.IsOK}");
+
+                if (result.ShouldTrigger && !result.IsOK)
+                {
+                    AddLog("WARN", "检测结果 NG，执行电磁阀剔除");
+                    TriggerRejectAsync();
+                }
+            }
+            else
+            {
+                // 队列空：默认判 NG 并剔除（安全策略）
+                AddLog("WARN", "传感器触发但结果队列为空，按安全策略执行剔除");
+                TriggerRejectAsync();
+            }
+        }
+
+        /// <summary>
+        /// 接收 Vision 模块发布的检测结果并存入队列。
+        /// </summary>
+        private void OnDetectionResultReceived(DetectionResult result)
+        {
+            _resultQueue.Enqueue(result);
+            AddLog("INFO", $"检测结果入队: {result.ResultText}, 队列长度={_resultQueue.Count}");
+
+            // 确保队列不堆积，只保留最新的结果
+            while (_resultQueue.Count > 1)
+            {
+                _resultQueue.TryDequeue(out _);
+            }
+        }
+
+        /// <summary>
+        /// 执行电磁阀剔除：根据传送带速度和 Camera→Solenoid 距离计算延时，打开电磁阀后自动关闭。
+        /// </summary>
+        private async void TriggerRejectAsync()
+        {
+            try
+            {
+                // 从配置读取传送带速度和 Camera→Solenoid 距离
+                double beltSpeed = _config.Motion?.BeltSpeedMmPerSec ?? 200.0;
+                double distance = _config.Motion?.CameraToRejectMm ?? 350.0;
+                double rejectDuration = _config.Motion?.RejectDurationMs ?? 40.0;
+
+                // 计算产品从传感器到电磁阀所需时间（ms）
+                int delayMs = distance > 0 && beltSpeed > 0
+                    ? (int)(distance / beltSpeed * 1000)
+                    : 1750; // 默认 1.75s
+
+                AddLog("INFO", $"剔除延时计算: 距离={distance}mm, 速度={beltSpeed}mm/s, 延时={delayMs}ms");
+
+                await Task.Delay(delayMs);
+
+                _solenoid.OpenValue();
+                AddLog("INFO", $"电磁阀打开，持续 {rejectDuration}ms");
+                _eventAggregator.GetEvent<SolenoidStatusEvent>().Publish(new SolenoidStatus { solenoidStatus = 0 });
+
+                await Task.Delay((int)rejectDuration);
+
+                _solenoid.CloseValue();
+                AddLog("INFO", "电磁阀关闭，剔除完成");
+                _eventAggregator.GetEvent<SolenoidStatusEvent>().Publish(new SolenoidStatus { solenoidStatus = 1 });
+
+            }
+            catch (Exception ex)
+            {
+                AddLog("ERROR", $"剔除执行异常: {ex.Message}");
+            }
         }
 
         private async void OnChangeSpeedCommand()
@@ -207,6 +308,8 @@ namespace Motion.ViewModels
         public void Destroy()
         {
             _sensorPollTask?.StopPoll();
+            _detectionResultToken?.Dispose();
+            _solenoid?.Dispose();
         }
 
         private Task ShowInfoDialogAsync(string message, string title = "提示")

@@ -14,7 +14,6 @@ namespace Core.Models
         private PeriodicTimer? _timer;
         private CancellationTokenSource? _cts;
         private Task? _runTask;
-        private 
 
         public PollTask(Func<Task> pollAction, int intervalMs)
         {
